@@ -21,7 +21,7 @@ import TeamsCore
 private actor PerformanceFixtureTransport: HTTPTransport {
     private var newest = 100
     func cachedMessages(count: Int, account: String) -> [TeamsWebMessage] {
-        (1...count).map { index in
+        (81...(80 + count)).map { index in
             TeamsWebMessage(id: String(1_800_000_000_000 + index),
                 content: "<p><strong>Fictional cached message \(index) · \(account)</strong> Xin chào 👋 <a href=\"https://example.com/fixture\">Reference</a></p><ol><li>First item</li><li><em>Second item</em></li></ol>",
                 messageType: "RichText/Html", imDisplayName: "Alex Example", from: .string("8:orgid:" + account),
