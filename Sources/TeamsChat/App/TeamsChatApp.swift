@@ -90,7 +90,9 @@ struct TeamsChatApp: App {
         Settings {
             #if DEBUG
             if TeamsPerformanceFixtureConfiguration.enabled {
-                Text("Account connections are disabled in the isolated fixture.").padding()
+                SettingsView(connection: connection, isolated: true)
+                    .defaultAppStorage(TeamsPerformanceFixtureConfiguration.defaults)
+                    .tint(ChatTheme.accent)
             } else {
                 SettingsView(connection: connection)
                     .tint(ChatTheme.accent)
@@ -102,7 +104,17 @@ struct TeamsChatApp: App {
         }
 
         WindowGroup("Sample Workspace", id: "demo") {
+            #if DEBUG
+            if TeamsPerformanceFixtureConfiguration.enabled {
+                ContentView(store: store)
+                    .defaultAppStorage(TeamsPerformanceFixtureConfiguration.defaults)
+                    .tint(ChatTheme.accent).frame(minWidth: 820, minHeight: 580)
+            } else {
+                ContentView(store: store).tint(ChatTheme.accent).frame(minWidth: 820, minHeight: 580)
+            }
+            #else
             ContentView(store: store).tint(ChatTheme.accent).frame(minWidth: 820, minHeight: 580)
+            #endif
         }
         .defaultSize(width: 1180, height: 800)
     }

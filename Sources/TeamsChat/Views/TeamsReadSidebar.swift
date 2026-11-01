@@ -90,6 +90,8 @@ struct TeamsReadSidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(TeamsSurface.window)
         .overlay {
             if !filter.isEmpty && chats.isEmpty && !hasFolderResults && !(store.selfChat.map { matches($0) } ?? false) {
                 ContentUnavailableView.search(text: filter)
@@ -149,7 +151,7 @@ struct TeamsReadSidebar: View {
             }
         }
         .padding(8)
-        .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: 8))
+        .modifier(TeamsControlSurface())
         .padding(.horizontal, 12).padding(.bottom, 2)
     }
 

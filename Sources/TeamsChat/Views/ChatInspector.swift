@@ -60,14 +60,17 @@ struct ChatInspector: View {
                 }
                 .buttonStyle(.borderless)
             }
-            .padding(20)
+            .modifier(TeamsSectionPanel())
+            .padding(12)
         }
     }
 
     private var search: some View {
         VStack(alignment: .leading, spacing: 12) {
             ConversationSearchField(text: $query, focus: searchFocus, accessibilityName: "Search this conversation")
-                .frame(height: 24)
+                .padding(6)
+                .modifier(TeamsControlSurface())
+                .frame(height: 32)
             Text("Searches demo messages on this Mac.").font(.caption).foregroundStyle(.secondary)
             if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ContentUnavailableView("Find a message", systemImage: "text.magnifyingglass",
@@ -90,7 +93,7 @@ struct ChatInspector: View {
                                         .font(.caption2).foregroundStyle(.tertiary)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                                .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
                             }
                             .buttonStyle(.plain)
                         }

@@ -19,7 +19,9 @@ struct ConversationSearchField: NSViewRepresentable {
     func makeNSView(context: Context) -> SearchTextField {
         let field = SearchTextField()
         field.placeholderString = "Search this conversation"
-        field.bezelStyle = .roundedBezel
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .exterior
         field.cell?.sendsActionOnEndEditing = false
         field.setAccessibilityLabel(accessibilityName)
         field.delegate = context.coordinator

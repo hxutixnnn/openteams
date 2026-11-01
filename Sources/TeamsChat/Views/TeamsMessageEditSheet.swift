@@ -51,14 +51,14 @@ struct TeamsMessageEditSheet: View {
                     Text("Replying to \(reply.name)").font(.caption.weight(.semibold))
                     Text(reply.preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius))
+                    .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
             }
             TeamsMentionSuggestions(picker: mentionPicker)
             TeamsRichComposer(document: $document, conversationID: identity, focusRequest: focusRequest,
                               command: command, sendOnReturn: false, send: {}, editable: !saving && !uncertain && !completed,
                               members: members, accountID: accountID, mentionPicker: mentionPicker)
                 .frame(minHeight: 160)
-                .background(TeamsSurface.input, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius))
+                .background(TeamsSurface.input, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
                 .disabled(saving || uncertain || completed)
             HStack {
                 if saving { ProgressView().controlSize(.small); Text("Saving…").font(.caption) }
@@ -70,6 +70,9 @@ struct TeamsMessageEditSheet: View {
             }
         }
         .padding(20)
+        .modifier(TeamsInsetPanel())
+        .background(TeamsSurface.window)
+        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .frame(minWidth: 540, minHeight: 320)
         .alert("Add link", isPresented: $showLink) {
             TextField("https://example.com", text: $linkText)

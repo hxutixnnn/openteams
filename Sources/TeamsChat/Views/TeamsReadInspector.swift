@@ -2,7 +2,6 @@ import SwiftUI
 import TeamsCore
 
 struct TeamsReadInspector: View {
-    @Environment(\.displayScale) private var displayScale
     var store: TeamsReaderStore
     let chat: TeamsWebChat
     let accountScope: String
@@ -53,8 +52,6 @@ struct TeamsReadInspector: View {
                 ForEach(InspectorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented).labelsHidden().tint(.secondary)
-            .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(TeamsSurface.border, lineWidth: 1 / max(displayScale, 1)))
             .padding(12)
             if tab == .people { details } else if tab == .search { search } else { shared }
         }
@@ -119,7 +116,7 @@ struct TeamsReadInspector: View {
                                     }.buttonStyle(.link)
                                 }
                             }.font(.caption)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
+                        }.modifier(TeamsSectionPanel(radius: TeamsSurface.cardRadius))
                     }
                     if sharedHasMore { Button("Load more") { Task { await loadShared(more: true) } }.disabled(sharedLoading) }
                 }
@@ -191,8 +188,8 @@ struct TeamsReadInspector: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius))
-            .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius).strokeBorder(TeamsSurface.border, lineWidth: 1 / max(displayScale, 1)))
+            .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous).strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth))
             .padding(.horizontal, 12).padding(.bottom, 12)
         }
     }
@@ -265,7 +262,9 @@ struct TeamsReadInspector: View {
     private var search: some View {
         VStack(alignment: .leading, spacing: 12) {
             ConversationSearchField(text: $query, focus: searchFocus, accessibilityName: "Search Teams messages") { searchServer() }
-                .frame(height: 24)
+                .padding(6)
+                .modifier(TeamsControlSurface())
+                .frame(height: 32)
             if store.canSearchServer {
                 Button(searching ? "Searching…" : "Search Teams") { searchServer() }.disabled(searching || store.searchCoolingDown || query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -312,7 +311,7 @@ struct TeamsReadInspector: View {
                                         .font(.caption2).foregroundStyle(.tertiary)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                                .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: 8))
+                                .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
                             }
                             .buttonStyle(.plain)
                         }

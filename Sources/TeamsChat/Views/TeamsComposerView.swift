@@ -3,7 +3,6 @@ import SwiftUI
 import TeamsCore
 
 struct TeamsComposerView: View {
-    @Environment(\.displayScale) private var displayScale
     var store: TeamsReaderStore
     let chat: TeamsWebChat
     let accountScope: String
@@ -92,7 +91,7 @@ struct TeamsComposerView: View {
                                 .buttonStyle(.borderless).accessibilityLabel("Cancel reply")
                         }
                         .padding(8)
-                        .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius))
+                        .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
                         .padding([.horizontal, .top], 8)
                     }
                     TeamsMentionSuggestions(picker: mentionPicker).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
@@ -141,8 +140,8 @@ struct TeamsComposerView: View {
                     }
                     .padding(.horizontal, 12).padding(.bottom, 10)
                 }
-                .background(TeamsSurface.input, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius))
-                .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius).strokeBorder(TeamsSurface.border, lineWidth: 1 / max(displayScale, 1)))
+                .background(TeamsSurface.input, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous).strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth))
                 if unavailableChat || composer.connectionIssue(at: context.date) != nil || composer.persistenceError != nil {
                   HStack(alignment: .firstTextBaseline, spacing: 8) {
                     if unavailableChat {

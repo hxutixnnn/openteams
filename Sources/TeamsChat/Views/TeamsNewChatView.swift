@@ -2,7 +2,6 @@ import SwiftUI
 import TeamsCore
 
 struct TeamsNewChatView: View {
-    @Environment(\.displayScale) private var displayScale
     var store: TeamsReaderStore
     let account: String
     let accountRevision: UUID
@@ -25,7 +24,7 @@ struct TeamsNewChatView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("New chat").font(.headline)
             HStack {
-                TextField("Find people", text: $query).onSubmit(search)
+                TextField("Find people", text: $query).textFieldStyle(.plain).padding(7).modifier(TeamsControlSurface()).onSubmit(search)
                 Button("Search", action: search).disabled(busy || !store.connected || query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             if !selected.isEmpty {
@@ -43,8 +42,8 @@ struct TeamsNewChatView: View {
                 }.buttonStyle(.plain).disabled(person.mri == nil || selected.contains(where: { $0.id == person.id }))
             }
             .listStyle(.plain).scrollContentBackground(.hidden)
-            .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius))
-            .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius).strokeBorder(TeamsSurface.border, lineWidth: 1 / max(displayScale, 1)))
+            .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous).strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth))
             .frame(minHeight: 170)
             .overlay {
                 if results.isEmpty && !busy {
@@ -56,7 +55,7 @@ struct TeamsNewChatView: View {
                     .allowsHitTesting(false)
                 }
             }
-            if selected.count > 1 { TextField("Group name (optional)", text: $title) }
+            if selected.count > 1 { TextField("Group name (optional)", text: $title).textFieldStyle(.plain).padding(7).modifier(TeamsControlSurface()) }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
             if !store.connected {
                 HStack { Text("Reconnect to continue. Your recipients and group name are kept here.").font(.caption); Button("Reconnect", action: connect) }
@@ -110,7 +109,10 @@ struct TeamsNewChatView: View {
                 Button("Create chat", action: create).buttonStyle(.borderedProminent)
                     .disabled(busy || !store.connected || selected.isEmpty || outcomeUnknown || store.creationNeedsReview)
             }
-        }.padding(20).frame(width: 480, height: 420)
+        }.padding(20)
+        .modifier(TeamsInsetPanel())
+        .background(TeamsSurface.window)
+        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius)).frame(width: 480, height: 420)
             .onAppear { presentedReview = store.creationReview; reviewWasPresent = store.creationReview != nil || store.creationNeedsReview }
     }
 

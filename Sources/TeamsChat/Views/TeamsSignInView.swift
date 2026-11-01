@@ -28,6 +28,9 @@ struct TeamsSignInView: View {
             Text("Sign-in is stored securely in Keychain. Downloaded chats are saved on this Mac.")
                 .font(.caption).foregroundStyle(.secondary).padding(12)
         }
+        .modifier(TeamsInsetPanel())
+        .background(TeamsSurface.window)
+        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .frame(width: 940, height: 720)
         .task {
             while !Task.isCancelled {

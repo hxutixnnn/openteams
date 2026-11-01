@@ -177,6 +177,9 @@ struct TeamsPerformanceFixtureView: View {
 private struct PerformanceFixtureContent: View {
     @ViewState<PerformanceFixtureController> private var controller: PerformanceFixtureController
     @ViewState<TeamsNotificationRouter> private var router = TeamsNotificationRouter()
+    @ViewState<FixtureChatStore> private var sampleStore = FixtureChatStore(draftURL: nil)
+    @ViewState<Bool> private var sampleWorkspace = false
+    @ViewState<String> private var appearance = "System"
 
     init(root: URL) {
         _controller = ViewState(initialValue: PerformanceFixtureController(root: root))
@@ -185,7 +188,7 @@ private struct PerformanceFixtureContent: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Isolated fixture · \(controller.store.accountID) · \(controller.ready ? "Ready" : "Loading")")
+                Text("Isolated fixture · \(controller.store.accountID) · \(controller.ready ? "Ready" : "Loading")").lineLimit(1)
                 Button("Account A") { Task { await controller.connect("fixture-a") } }
                 Button("Account B") { Task { await controller.connect("fixture-b") } }
                 Button("Append and refresh") { Task { await controller.append() } }
@@ -194,10 +197,26 @@ private struct PerformanceFixtureContent: View {
             }
             .padding(8)
             .disabled(controller.busy)
-            TeamsReadContentView(store: controller.store, refreshCoordinator: controller.coordinator,
-                                 notificationRouter: router, connect: {}, persistSelection: false)
+            HStack {
+                Toggle("Sample Workspace", isOn: $sampleWorkspace).toggleStyle(TeamsPillToggleStyle())
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(["System", "Light", "Dark"], id: \.self) { Text($0) }
+                }.frame(width: 180)
+                Spacer()
+                SettingsLink { Label("Settings", systemImage: "gearshape") }
+            }
+            .padding(.horizontal, 10).padding(.bottom, 6)
+            if sampleWorkspace {
+                ContentView(store: sampleStore)
+            } else {
+                TeamsReadContentView(store: controller.store, refreshCoordinator: controller.coordinator,
+                                     notificationRouter: router, connect: {}, persistSelection: false)
+            }
         }
-        .frame(minWidth: 1000, minHeight: 650)
+        .tint(ChatTheme.accent)
+        .background(TeamsSurface.window)
+        .preferredColorScheme(appearance == "Dark" ? .dark : appearance == "Light" ? .light : nil)
+        .frame(minWidth: 820, minHeight: 580)
         .task { await controller.connect("fixture-a") }
     }
 }

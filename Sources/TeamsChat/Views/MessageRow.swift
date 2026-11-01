@@ -21,7 +21,7 @@ struct MessageRow: View {
                 }
                 if let quote = message.quote {
                     HStack(spacing: 10) {
-                        RoundedRectangle(cornerRadius: 2).fill(ChatTheme.accent.opacity(0.6)).frame(width: 3)
+                        RoundedRectangle(cornerRadius: 2, style: .continuous).fill(ChatTheme.accent.opacity(0.6)).frame(width: 3)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(quote.author).font(.caption.weight(.semibold))
                             Text(quote.text).font(.callout).foregroundStyle(.secondary).lineLimit(3)
@@ -29,7 +29,7 @@ struct MessageRow: View {
                         .padding(.vertical, 8)
                     }
                     .padding(.horizontal, 10)
-                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                    .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
                 }
                 Text(message.text)
                     .font(.system(size: compact ? 13 : 14))
@@ -41,7 +41,7 @@ struct MessageRow: View {
                         .textSelection(.enabled)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                        .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
                 }
                 if let attachment = message.attachment { AttachmentCard(attachment: attachment) }
                 if !message.reactions.isEmpty {
@@ -92,8 +92,8 @@ struct AttachmentCard: View {
             Text("Sample").font(.caption2).foregroundStyle(.tertiary)
         }
         .padding(10).frame(maxWidth: 360)
-        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quaternary, lineWidth: 1))
+        .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous).strokeBorder(TeamsSurface.border, lineWidth: 1))
         .help("Sample attachment preview")
     }
 }

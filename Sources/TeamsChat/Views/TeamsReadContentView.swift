@@ -23,8 +23,6 @@ struct TeamsReadContentView: View {
     @ViewState<ConversationSearchFocus> private var searchFocus = ConversationSearchFocus()
     @ViewState<NewChatPresentation?> private var newChatPresentation = nil
     @ViewState<NavigationSplitViewVisibility> private var columnVisibility = .all
-    @ViewState<CGFloat> private var windowWidth = 1180
-    @ViewState<Bool> private var sidebarCollapsedForInspector = false
     @ViewState<UUID> private var windowID = UUID()
 
     private var selectedChat: TeamsWebChat? { store.conversation(selectedID) }
@@ -38,26 +36,21 @@ struct TeamsReadContentView: View {
                              filter: $conversationFilter, connect: connect,
                              newChat: { newChatPresentation = .init(account: store.accountScope, revision: store.accountRevision) })
                 .navigationTitle("Chats")
-                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 360)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
-            detail
-                .toolbar { toolbar }
+            Group {
+                if selectedChat != nil { detail }
+                else { detail.frame(maxWidth: .infinity, maxHeight: .infinity).modifier(TeamsInsetPanel()) }
+            }
+            .toolbar { toolbar }
         }
+        .navigationSplitViewStyle(.balanced)
+        .background(TeamsSurface.window)
+        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .background(TeamsWindowProbe { window in
             refreshCoordinator.attachWindow(windowID, window: window)
             routePendingNotification()
         })
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-            windowWidth = width
-            adjustSidebarForInspector()
-        }
-        .onChange(of: showInspector) { _, _ in adjustSidebarForInspector() }
-        .onChange(of: columnVisibility) { _, visibility in
-            if visibility != .detailOnly && showInspector && windowWidth < 1100 {
-                sidebarCollapsedForInspector = false
-                showInspector = false
-            }
-        }
         .sheet(item: $newChatPresentation) { presentation in
             TeamsNewChatView(store: store, account: presentation.account, accountRevision: presentation.revision,
                              ownsPresentation: { newChatPresentation?.id == presentation.id && store.accountScope == presentation.account && store.accountRevision == presentation.revision }, connect: connect) { id in
@@ -123,15 +116,14 @@ struct TeamsReadContentView: View {
 
     @ViewBuilder private var detail: some View {
         if let chat = selectedChat {
-            TeamsReadDetailView(store: store, chat: chat, accountScope: store.accountScope, accountRevision: store.accountRevision, selectedChatID: $selectedID, jumpToMessage: $jumpToMessage, connect: connect, focusRequest: focusRequest, loadFilePreview: loadFilePreview)
-                .id(store.accountRevision.uuidString + ":" + chat.id)
-                .modifier(TeamsInsetPanel())
-                .navigationTitle(store.conversationTitle(chat))
-                .inspector(isPresented: $showInspector) {
-                    TeamsReadInspector(store: store, chat: chat, accountScope: store.accountScope, accountRevision: store.accountRevision, isCurrent: { selectedID == chat.id }, connect: connect, tab: $inspectorTab,
-                                       query: $messageQuery, jumpToMessage: $jumpToMessage, searchFocus: searchFocus)
-                        .inspectorColumnWidth(min: 220, ideal: 260, max: 340)
-                }
+            TeamsConversationLayout(showInspector: $showInspector) {
+                TeamsReadDetailView(store: store, chat: chat, accountScope: store.accountScope, accountRevision: store.accountRevision, selectedChatID: $selectedID, jumpToMessage: $jumpToMessage, connect: connect, focusRequest: focusRequest, loadFilePreview: loadFilePreview)
+                    .id(store.accountRevision.uuidString + ":" + chat.id)
+            } inspector: {
+                TeamsReadInspector(store: store, chat: chat, accountScope: store.accountScope, accountRevision: store.accountRevision, isCurrent: { selectedID == chat.id }, connect: connect, tab: $inspectorTab,
+                                   query: $messageQuery, jumpToMessage: $jumpToMessage, searchFocus: searchFocus)
+            }
+            .navigationTitle(store.conversationTitle(chat))
         } else if store.isLoadingChats && store.chats.isEmpty {
             ProgressView("Loading chats…").frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if store.chats.isEmpty && !store.connected {
@@ -177,16 +169,6 @@ struct TeamsReadContentView: View {
                 SettingsLink { Label("Settings", systemImage: "gearshape") }
             } label: { Label("More", systemImage: "ellipsis") }
                 .help("More options")
-        }
-    }
-
-    private func adjustSidebarForInspector() {
-        if showInspector && windowWidth < 1100 && columnVisibility != .detailOnly {
-            columnVisibility = .detailOnly
-            sidebarCollapsedForInspector = true
-        } else if sidebarCollapsedForInspector && (!showInspector || windowWidth >= 1100) {
-            columnVisibility = .all
-            sidebarCollapsedForInspector = false
         }
     }
 

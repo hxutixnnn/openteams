@@ -85,7 +85,7 @@ struct TeamsMessageContextView: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(12)
-                                .background(message.id == store.contextTargetID ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                                .background(message.id == store.contextTargetID ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 .id(message.id)
                             }
                             if store.contextForwardToken != nil {
@@ -105,6 +105,9 @@ struct TeamsMessageContextView: View {
                 }
             }
         }
+        .modifier(TeamsInsetPanel())
+        .background(TeamsSurface.window)
+        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .frame(minWidth: 540, minHeight: 420)
     }
 }
