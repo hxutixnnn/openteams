@@ -46,7 +46,7 @@ private actor CachedLoadTransport: HTTPTransport {
         }
         await store.loadConversation("fixture")
         await switchTask?.value
-        precondition(switchTask != nil && store.accountID == "fixture-b" && store.messages(in: "fixture").isEmpty)
+        precondition(switchTask != nil && store.accountID == "fixture-b" && store.messages(in: "fixture").isEmpty && !store.isLoadingConversation("fixture"))
         await store.loadConversation("fixture")
         precondition(store.messages(in: "fixture").map(\.author.name) == Array(repeating: "fixture-b", count: 200))
         await store.restoreAccount(accountID: "fixture-a", tenantID: tenant, displayName: "A")
@@ -54,7 +54,7 @@ private actor CachedLoadTransport: HTTPTransport {
         store.onCachedLoadTiming = { stage, _, _ in if stage == "cache_read" { coldTask?.cancel() } }
         coldTask = Task { @MainActor in await store.loadConversation("fixture") }
         await coldTask?.value
-        precondition(store.messages(in: "fixture").isEmpty && store.cacheWarning == nil)
+        precondition(store.messages(in: "fixture").isEmpty && store.cacheWarning == nil && !store.isLoadingConversation("fixture"))
         store.onCachedLoadTiming = nil
         async let first: Void = store.loadConversation("fixture")
         async let second: Void = store.loadConversation("second")

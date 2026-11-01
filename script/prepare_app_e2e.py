@@ -11,7 +11,10 @@ import uuid
 
 parser = argparse.ArgumentParser(description="Prepare an isolated native fixture without launching it.")
 parser.add_argument("--cached-history-count", type=int, choices=[0, 200, 2000], default=0)
+parser.add_argument("--allow-fictional-send", action="store_true")
 arguments = parser.parse_args()
+if arguments.allow_fictional_send and not arguments.cached_history_count:
+    parser.error("--allow-fictional-send requires --cached-history-count")
 
 repository = Path(__file__).resolve().parent.parent
 subprocess.run(["swift", "build", "--jobs", "4", "--product", "OpenTeams"], cwd=repository, check=True, timeout=600)
@@ -36,6 +39,7 @@ with (contents / "Info.plist").open("wb") as stream:
         "LSUIElement": True,
         "OpenTeamsPerformanceFixtureRoot": str(root),
         "OpenTeamsCachedHistoryCount": arguments.cached_history_count,
+        "OpenTeamsFictionalSendEnabled": arguments.allow_fictional_send,
     }, stream)
 manifest = {
     "bundle": str(bundle), "root": str(root), "bundle_id": identity,

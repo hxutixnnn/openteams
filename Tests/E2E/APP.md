@@ -52,4 +52,4 @@ Record the commit and source hashes, bundle binary hash, temporary root, process
 
 Manual app E2E outcomes are distinct from performance benchmarks. Native FPS/hitch tracing, startup timings, rapid typing/IME, selection, accessibility and live-service behavior require their own evidence. If a step cannot be completed with the approved background route, report the exact step as blocked and withhold any claim that the full journey passed. Independent QA must approve the final PR commit before merge.
 
-Cached-history loading has an additional isolated preparation mode and native acceptance journey in [CACHED-LOADING.md](CACHED-LOADING.md).
+Cached-history loading has an additional isolated preparation mode, an opt-in fictional-only send mode (default remains rejected), and a native acceptance journey in [CACHED-LOADING.md](CACHED-LOADING.md).

@@ -75,6 +75,7 @@ public final class TeamsReaderStore {
     private var mediaClient: TeamsMediaClient?
     private var cache: TeamsReadCache?
     private var histories: [String: TeamsCachedHistory] = [:]
+    private var cachedLoadCounts: [String: Int] = [:]
     private let cachedMessageRenderer = TeamsCachedMessageRenderer()
     private struct RenderingInputs {
         let messages: [TeamsWebMessage]
@@ -202,6 +203,7 @@ public final class TeamsReaderStore {
         sessionExpired = false
         reacting = []
         loadingChatIDs = []
+        cachedLoadCounts = [:]
         isLoadingChats = false
         loadingFolders = false
         chatListError = nil
@@ -209,6 +211,7 @@ public final class TeamsReaderStore {
     }
 
     public func messages(in id: String) -> [TeamsRenderedMessage] { renderedMessages[id] ?? [] }
+    public func isLoadingConversation(_ id: String) -> Bool { loadingChatIDs.contains(id) || cachedLoadCounts[id, default: 0] > 0 }
     public func ownsSharePointAttachment(_ attachment: TeamsSharePointAttachment) -> Bool {
         guard attachment.accountScope == accountScope, attachment.accountRevision == accountRevision else { return false }
         if let revision = attachment.contextRevision {
@@ -1407,7 +1410,7 @@ public final class TeamsReaderStore {
 
     @discardableResult public func sendDraft(in id: String) async -> String? {
         guard let chat = conversation(id), chat.isDisabled != true,
-              chat.isConversationDeleted != true else { return nil }
+              chat.isConversationDeleted != true, let cache else { return nil }
         let current = generation
         let draftReply = composer.replies[id]
         var reply = draftReply.flatMap { target in histories[id]?.messages.first { $0.id == target.messageID } ?? (contextChatID == id ? contextRawMessages.first { $0.id == target.messageID } : nil) }
@@ -1428,12 +1431,17 @@ public final class TeamsReaderStore {
                   composer.finishPreparation(in: id, revision: preparation) else { return nil }
         }
         guard let sent = await composer.sendDraft(in: id, replyingTo: reply, preview: draftReply?.preview ?? ""), current == generation else { return nil }
-        var history = histories[id] ?? TeamsCachedHistory()
-        history.merge([sent])
-        histories[id] = history
-        render(id)
-        do { try await cache?.save(history, in: id) }
-        catch { if current == generation { cacheWarning = "The message was sent, but could not be saved on this Mac." } }
+        do {
+            var history: TeamsCachedHistory
+            if let existing = histories[id] { history = existing }
+            else { history = try await cache.history(in: id) }
+            guard current == generation else { return nil }
+            history = histories[id] ?? history
+            history.merge([sent])
+            histories[id] = history
+            render(id)
+            try await cache.save(history, in: id)
+        } catch { if current == generation { cacheWarning = "The message was sent, but could not be saved on this Mac." } }
         guard current == generation else { return nil }
         await refreshConversation(id)
         return sent.id
@@ -1500,17 +1508,23 @@ public final class TeamsReaderStore {
     public func loadConversation(_ id: String) async {
         Task { await self.refreshGroupPictureMetadata(id) }
         let current = generation
-        if histories[id] == nil, let cache {
+        if renderedMessages[id] == nil, let cache {
+            cachedLoadCounts[id, default: 0] += 1
+            defer { if current == generation { cachedLoadCounts[id, default: 0] -= 1 } }
             do {
                 #if DEBUG
                 let cacheStart = ContinuousClock.now
                 #endif
-                let history = try await cache.history(in: id)
+                var history: TeamsCachedHistory
+                if let existing = histories[id] { history = existing }
+                else { history = try await cache.history(in: id) }
                 guard current == generation, !Task.isCancelled else { return }
+                history = histories[id] ?? history
+                histories[id] = history
                 #if DEBUG
                 onCachedLoadTiming?("cache_read", cachedLoadMilliseconds(since: cacheStart), false)
                 #endif
-                if histories[id] == nil {
+                if renderedMessages[id] == nil {
                     let people = renderingPeople(in: id), scope = accountScope, epoch = accountRevision
                     let prepared = try await cachedMessageRenderer.render(history.messages, people: people, accountScope: scope, accountRevision: epoch, chatID: id)
                     guard current == generation, !Task.isCancelled else { return }
@@ -1518,8 +1532,7 @@ public final class TeamsReaderStore {
                     onCachedLoadTiming?("conversion", prepared.conversionMilliseconds, prepared.convertedOnMainThread)
                     let publicationStart = ContinuousClock.now
                     #endif
-                    if histories[id] == nil {
-                        histories[id] = history
+                    if histories[id]?.messages == history.messages {
                         if people == renderingPeople(in: id) {
                             composer.reconcile(history.messages, in: id)
                             renderingInputs[id] = RenderingInputs(messages: history.messages, messageIndices: prepared.indices, people: people, accountScope: scope, accountRevision: epoch)
@@ -1634,6 +1647,7 @@ public final class TeamsReaderStore {
         cache = TeamsReadCache(root: cacheRoot, accountID: accountID, tenantID: tenantID)
         composer.restore(accountID: accountID, tenantID: tenantID)
         chats = []; histories = [:]; renderedMessages = [:]; groupPictureLookups = [:]; groupPictureFreshness = [:]; groupPictureListMetadata = []
+        cachedLoadCounts = [:]
         renderingInputs = [:]
         serverChatSnapshot = nil
         pendingReadChatIDs = []; finishableReadChatIDs = []; readStatusMessages = [:]

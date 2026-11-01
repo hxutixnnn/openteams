@@ -19,6 +19,15 @@ import TeamsCore
 }
 
 private actor PerformanceFixtureTransport: HTTPTransport {
+    private let allowsSend: Bool
+    private var sentMessages: [String: [TeamsWebMessage]] = [:]
+    private var nextSentID: Int64 = 1_800_000_010_000
+    init(allowsSend: Bool) { self.allowsSend = allowsSend }
+    func reserveSendIDs(_ messages: [TeamsWebMessage]) {
+        for message in messages {
+            if let id = Int64(message.id) { nextSentID = max(nextSentID, id) }
+        }
+    }
     private var newest = 100
     func cachedMessages(count: Int, account: String) -> [TeamsWebMessage] {
         (81...(80 + count)).map { index in
@@ -84,6 +93,7 @@ private actor PerformanceFixtureTransport: HTTPTransport {
         let contextMessagePath = "/api/chatsvc/fixture/v1/users/ME/conversations/fixture-one/messages/"
         let data: Data
         var status = 200
+        var headers: [String: String] = [:]
         if method == "GET", url.path.hasSuffix("/chats") {
             let members: [TeamsWebMember] = [.init(mri: "8:orgid:fixture-a", displayName: "Alex Example"), .init(mri: "8:orgid:ada", displayName: "Ada Example")]
             data = try JSONEncoder().encode(TeamsWebChatPage(items: [
@@ -110,10 +120,27 @@ private actor PerformanceFixtureTransport: HTTPTransport {
             if method == "PUT" { likedAccounts.insert(account) }
             else { likedAccounts.remove(account) }
             data = Data("{}".utf8)
+        } else if method == "POST", allowsSend,
+                  let chatID = components.dropLast().last, ["fixture-one", "fixture-two"].contains(chatID),
+                  url.path == "/api/chatsvc/fixture/v1/users/ME/conversations/" + chatID + "/messages" {
+            let body = try JSONDecoder().decode([String: TeamsWebJSONValue].self, from: request.httpBody ?? Data())
+            guard body["from"]?.stringValue == "8:orgid:" + account,
+                  body["conversationid"]?.stringValue == chatID,
+                  let content = body["content"]?.stringValue else { throw URLError(.badServerResponse) }
+            nextSentID += 1
+            let id = String(nextSentID)
+            sentMessages[account + ":" + chatID, default: []].append(TeamsWebMessage(id: id, content: content,
+                messageType: body["messagetype"]?.stringValue, imDisplayName: account, from: .string("8:orgid:" + account),
+                originalArrivalTime: id, composeTime: body["composetime"]?.stringValue,
+                properties: body["properties"], clientMessageId: body["clientmessageid"]?.stringValue))
+            status = 201
+            headers["Location"] = url.absoluteString + "/" + id
+            data = try JSONEncoder().encode(["OriginalArrivalTime": id])
         } else if method == "GET", url.path.hasSuffix("/messages"),
                   let chat = components.dropLast().last, ["fixture-one", "fixture-two"].contains(chat) {
             let older = request.value(forHTTPHeaderField: "x-ms-messageToken") == "older"
-            let messages = (older ? 61...80 : 81...newest).map { message($0, account: account, chat: chat) }
+            var messages = (older ? 61...80 : 81...newest).map { message($0, account: account, chat: chat) }
+            if !older, let chatID = components.dropLast().last { messages += sentMessages[account + ":" + chatID] ?? [] }
             data = try JSONEncoder().encode(TeamsWebMessagePage(messages: messages, messageToken: older ? nil : "older"))
         } else if let position = components.firstIndex(of: "messages"), components.count == position + 2,
                   let chat = components.prefix(position).last, ["fixture-one", "fixture-two"].contains(chat),
@@ -137,14 +164,14 @@ private actor PerformanceFixtureTransport: HTTPTransport {
             status = 404
             data = Data("{}".utf8)
         }
-        return (data, HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+        return (data, HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: headers)!)
     }
 }
 
 @MainActor @Observable private final class PerformanceFixtureController {
     let store: TeamsReaderStore
     let coordinator: TeamsRefreshCoordinator
-    private let transport = PerformanceFixtureTransport()
+    private let transport = PerformanceFixtureTransport(allowsSend: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFictionalSendEnabled") as? Bool == true)
     private let cacheRoot: URL
     private(set) var busy = false
     private(set) var ready = false
@@ -162,9 +189,12 @@ private actor PerformanceFixtureTransport: HTTPTransport {
         if let count = Bundle.main.object(forInfoDictionaryKey: "OpenTeamsCachedHistoryCount") as? Int, [200, 2000].contains(count) {
             let cache = TeamsReadCache(root: cacheRoot, accountID: account, tenantID: "fixture-tenant")
             for chatID in ["fixture-one", "fixture-two"] {
-                if let history = try? await cache.history(in: chatID), history.messages.isEmpty {
-                    let messages = await transport.cachedMessages(count: count, account: account)
-                    try? await cache.save(.init(messages: messages, messageToken: "older"), in: chatID)
+                if let history = try? await cache.history(in: chatID) {
+                    await transport.reserveSendIDs(history.messages)
+                    if history.messages.isEmpty {
+                        let messages = await transport.cachedMessages(count: count, account: account)
+                        try? await cache.save(.init(messages: messages, messageToken: "older"), in: chatID)
+                    }
                 }
             }
         }

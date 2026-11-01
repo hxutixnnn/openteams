@@ -37,7 +37,7 @@ struct TeamsReadDetailView: View {
     @ViewState<Bool> private var showMessageContext = false
 
     private var messages: [TeamsRenderedMessage] { store.messages(in: chat.id) }
-    private var loading: Bool { store.loadingChatIDs.contains(chat.id) }
+    private var loading: Bool { store.isLoadingConversation(chat.id) }
 
     var body: some View {
         VStack(spacing: 0) {

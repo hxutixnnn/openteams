@@ -3,7 +3,7 @@
 @@ -1492,12 +1492,18 @@
          }
      }
- 
+
 +    #if DEBUG
 +    @ObservationIgnored public var onCachedLoadTiming: (@MainActor (String, Double, Bool) -> Void)?
 +    #endif
@@ -40,5 +40,5 @@
 +        let duration = start.duration(to: .now).components
 +        return Double(duration.seconds) * 1000 + Double(duration.attoseconds) / 1e15
      }
- 
+
      private func availableClient() -> TeamsWebClient? {
