@@ -24,6 +24,15 @@ python3 script/setup_local_signing.py
 
 The build script creates and signs `dist/OpenTeams.app` and opens it. The local identity is stored in the login Keychain; this build is not notarized. If you already have the earlier TeamsChat installation and its pinned helper, keep the existing identity and helper and run the build script directly. Do not regenerate the helper over an existing version: changing its identity requires a credential migration.
 
+To install the signed local build in `/Applications`:
+
+```sh
+./script/build_and_run.sh --build-only
+./script/install.sh
+```
+
+The installer checks the signature and pinned credential helper before copying. If replacing a matching installation, it retains the previous app in a hidden staging directory under `/Applications`; it refuses to replace an unrelated app. It does not change your sign-in or local data. The icon source is in `assets/icon/`; run `./script/build_icon.sh` after changing it to regenerate the bundled icon.
+
 To check the build and run the test suite:
 
 ```sh

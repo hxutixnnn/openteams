@@ -38,6 +38,7 @@ APP_BINARY="$APP_CONTENTS/MacOS/$APP_NAME"
 mkdir -p "$APP_CONTENTS/MacOS" "$APP_CONTENTS/Frameworks" "$APP_CONTENTS/Resources" "$APP_CONTENTS/XPCServices"
 cp -R "$HELPER_PIN/TeamsCredentialService.xpc" "$APP_CONTENTS/XPCServices/"
 "$ROOT_DIR/script/verify_credential_helper.sh" "$APP_CONTENTS/XPCServices/TeamsCredentialService.xpc"
+cp "$ROOT_DIR/assets/icon/OpenTeams.icns" "$APP_CONTENTS/Resources/OpenTeams.icns"
 cp "$BUILD_DIR/$APP_NAME" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 rm -rf "$APP_CONTENTS/Frameworks/MSAL.framework"
@@ -50,6 +51,7 @@ cat > "$APP_CONTENTS/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>$APP_NAME</string>
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>TeamsSigningCertificate</key><string>$SIGNING_IDENTITY</string>
+  <key>CFBundleIconFile</key><string>OpenTeams.icns</string>
   <key>CFBundleName</key><string>OpenTeams</string>
   <key>CFBundleDisplayName</key><string>OpenTeams</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -64,8 +66,7 @@ PLIST
 /usr/bin/codesign --force --sign "$SIGNING_IDENTITY" "$STAGED_APP"
 /usr/bin/codesign --verify --strict "$STAGED_APP"
 "$ROOT_DIR/script/verify_credential_helper.sh" "$APP_CONTENTS/XPCServices/TeamsCredentialService.xpc"
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
-pkill -x "TeamsChat" >/dev/null 2>&1 || true
+python3 "$ROOT_DIR/script/app_processes.py" stop
 if [[ -e "$APP_BUNDLE" ]]; then mv "$APP_BUNDLE" "$STAGE_DIR/previous.app"; fi
 if ! mv "$STAGED_APP" "$APP_BUNDLE"; then
   if [[ -e "$STAGE_DIR/previous.app" ]]; then mv "$STAGE_DIR/previous.app" "$APP_BUNDLE"; fi
@@ -88,7 +89,7 @@ case "$MODE" in
   --verify|verify)
     open_app
     sleep 1
-    pgrep -x "$APP_NAME" >/dev/null
+    python3 "$ROOT_DIR/script/app_processes.py" verify-staged
     echo "Built and launched $APP_BUNDLE"
     ;;
   --build-only) echo "Built $APP_BUNDLE" ;;
