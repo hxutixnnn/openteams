@@ -215,9 +215,16 @@ private struct PerformanceFixtureContent: View {
             HStack {
                 Toggle("Sample Workspace", isOn: $sampleWorkspace).toggleStyle(TeamsPillToggleStyle())
                 Toggle("Inline image", isOn: $inlineImage).toggleStyle(TeamsPillToggleStyle())
-                Picker("Appearance", selection: $appearance.selection) {
-                    ForEach(["System", "Light", "Dark"], id: \.self) { Text($0) }
-                }.frame(width: 180)
+                Text("Appearance")
+                ForEach(["System", "Light", "Dark"], id: \.self) { selection in
+                    Button(selection) { appearance.selection = selection }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .tint(appearance.selection == selection ? ChatTheme.accent : .secondary)
+                        .accessibilityLabel("\(selection) appearance")
+                        .accessibilityValue(appearance.selection == selection ? "Selected" : "Not selected")
+                        .accessibilityAddTraits(appearance.selection == selection ? [.isSelected] : [])
+                }
                 Spacer()
                 SettingsLink { Label("Settings", systemImage: "gearshape") }
             }
