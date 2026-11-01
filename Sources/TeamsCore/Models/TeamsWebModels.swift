@@ -134,6 +134,7 @@ public struct TeamsWebMessage: Codable, Identifiable, Hashable, Sendable {
     public let clientMessageId: String?
     public let amsReferences: TeamsWebJSONValue?
     public let forwardedMessageContext: TeamsWebJSONValue?
+    public let arrivalDate: Date?
 
     public init(
         id: String, content: String? = nil, contentType: String? = nil,
@@ -155,6 +156,7 @@ public struct TeamsWebMessage: Codable, Identifiable, Hashable, Sendable {
         self.clientMessageId = clientMessageId
         self.amsReferences = amsReferences
         self.forwardedMessageContext = forwardedMessageContext
+        arrivalDate = Self.resolveArrivalDate(id: id, originalArrivalTime: originalArrivalTime, composeTime: composeTime)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -183,6 +185,7 @@ public struct TeamsWebMessage: Codable, Identifiable, Hashable, Sendable {
         amsReferences = try container.decodeIfPresent(TeamsWebJSONValue.self, forKey: .amsReferences)
             ?? decoder.container(keyedBy: AliasKeys.self).decodeIfPresent(TeamsWebJSONValue.self, forKey: .amsreferences)
         forwardedMessageContext = try container.decodeIfPresent(TeamsWebJSONValue.self, forKey: .forwardedMessageContext)
+        arrivalDate = Self.resolveArrivalDate(id: id, originalArrivalTime: originalArrivalTime, composeTime: composeTime)
     }
 
     public var senderID: String? {
@@ -193,7 +196,7 @@ public struct TeamsWebMessage: Codable, Identifiable, Hashable, Sendable {
         return nil
     }
 
-    public var arrivalDate: Date? {
+    private static func resolveArrivalDate(id: String, originalArrivalTime: String?, composeTime: String?) -> Date? {
         for value in [originalArrivalTime, composeTime].compactMap({ $0 }) {
             if let date = Self.parseDate(value) { return date }
         }

@@ -75,6 +75,13 @@ public final class TeamsReaderStore {
     private var mediaClient: TeamsMediaClient?
     private var cache: TeamsReadCache?
     private var histories: [String: TeamsCachedHistory] = [:]
+    private struct RenderingInputs {
+        let messages: [TeamsWebMessage]
+        let people: [String: Person]
+        let accountScope: String
+        let accountRevision: UUID
+    }
+    @ObservationIgnored private var renderingInputs: [String: RenderingInputs] = [:]
     private var groupPictureLookups: [String: UUID] = [:]
     private var groupPictureFreshness: [String: (version: String?, checkedAt: Date)] = [:]
     private var groupPictureListMetadata: Set<String> = []
@@ -1596,6 +1603,7 @@ public final class TeamsReaderStore {
         cache = TeamsReadCache(root: cacheRoot, accountID: accountID, tenantID: tenantID)
         composer.restore(accountID: accountID, tenantID: tenantID)
         chats = []; histories = [:]; renderedMessages = [:]; groupPictureLookups = [:]; groupPictureFreshness = [:]; groupPictureListMetadata = []
+        renderingInputs = [:]
         serverChatSnapshot = nil
         pendingReadChatIDs = []; finishableReadChatIDs = []; readStatusMessages = [:]
         conversationFolders = nil; foldersWarning = nil; loadingFolders = false
@@ -1682,13 +1690,30 @@ public final class TeamsReaderStore {
     }
 
     private func render(_ id: String) {
-        composer.reconcile(histories[id]?.messages ?? [], in: id)
+        let messages = histories[id]?.messages ?? []
+        composer.reconcile(messages, in: id)
         var people: [String: Person] = [:]
         for member in conversation(id)?.members ?? [] {
             guard let key = member.mri ?? member.objectId else { continue }
             people[key] = Person(id: key, name: member.preferredDisplayName ?? "Teams member")
         }
-        renderedMessages[id] = histories[id]?.messages.map { TeamsRenderedMessage($0, people: people, accountScope: accountScope, accountRevision: accountRevision, chatID: id) } ?? []
+        let previous = renderingInputs[id]
+        let canReuse = previous?.people == people && previous?.accountScope == accountScope
+            && previous?.accountRevision == accountRevision
+        if canReuse, previous?.messages == messages { return }
+
+        var reusable: [String: (raw: TeamsWebMessage, rendered: TeamsRenderedMessage)] = [:]
+        if canReuse, let previous {
+            for (raw, rendered) in zip(previous.messages, renderedMessages[id] ?? []) {
+                reusable[raw.id] = (raw, rendered)
+            }
+        }
+        let rendered = messages.map { message in
+            if let cached = reusable[message.id], cached.raw == message { return cached.rendered }
+            return TeamsRenderedMessage(message, people: people, accountScope: accountScope, accountRevision: accountRevision, chatID: id)
+        }
+        renderingInputs[id] = RenderingInputs(messages: messages, people: people, accountScope: accountScope, accountRevision: accountRevision)
+        if renderedMessages[id] != rendered { renderedMessages[id] = rendered }
     }
 
     private func availableClient() -> TeamsWebClient? {
