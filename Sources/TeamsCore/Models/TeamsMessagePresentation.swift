@@ -113,22 +113,28 @@ public struct TeamsRenderedMessage: Identifiable, Hashable, Sendable {
         createdAt = message.arrivalDate ?? Date(timeIntervalSince1970: 0)
         let properties: [String: TeamsWebJSONValue]
         if case let .object(value)? = message.properties { properties = value } else { properties = [:] }
-        func positive(_ value: TeamsWebJSONValue?) -> Bool {
-            switch value {
-            case .number(let number): number > 0
-            case .string(let string): string != "0" && !string.isEmpty && string != "false"
-            case .bool(let flag): flag
-            default: false
-            }
-        }
-        isDeleted = positive(properties["deletetime"]) || positive(properties["deleteTime"])
-        isEdited = positive(properties["edittime"]) || positive(properties["editTime"])
+        isDeleted = Self.isDeleted(message)
+        isEdited = Self.positive(properties["edittime"]) || Self.positive(properties["editTime"])
         files = isDeleted ? [] : Self.fileLinks(properties["files"], accountScope: accountScope, accountRevision: accountRevision, chatID: chatID, messageID: message.id, contextRevision: contextRevision)
         reactions = isDeleted ? [] : Self.reactionList(properties["emotions"])
         if isDeleted {
             body = TeamsMessageBody(text: "Message deleted", blocks: [.init(runs: [.init(text: "Message deleted")])])
         } else {
             body = TeamsBodyParser.parse(message.content ?? "", messageType: message.messageType)
+        }
+    }
+
+    static func isDeleted(_ message: TeamsWebMessage) -> Bool {
+        guard case let .object(properties)? = message.properties else { return false }
+        return positive(properties["deletetime"]) || positive(properties["deleteTime"])
+    }
+
+    private static func positive(_ value: TeamsWebJSONValue?) -> Bool {
+        switch value {
+        case .number(let number): number > 0
+        case .string(let string): string != "0" && !string.isEmpty && string != "false"
+        case .bool(let flag): flag
+        default: false
         }
     }
 

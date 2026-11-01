@@ -1,0 +1,450 @@
+[
+  {
+    "workload": "cached_list_plain",
+    "messages": 200,
+    "baseline": {
+      "pair_medians_ms": [
+        3.382292,
+        3.028875,
+        2.883833,
+        2.535791,
+        2.744459
+      ],
+      "median_ms": 2.883833,
+      "min_ms": 2.535791,
+      "max_ms": 3.382292
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        3.05725,
+        3.0085,
+        3.062458,
+        2.97625,
+        2.676375
+      ],
+      "median_ms": 3.0085,
+      "min_ms": 2.676375,
+      "max_ms": 3.062458
+    }
+  },
+  {
+    "workload": "cached_list_plain",
+    "messages": 2000,
+    "baseline": {
+      "pair_medians_ms": [
+        0.609166,
+        0.523875,
+        0.795833,
+        0.560125,
+        0.538541
+      ],
+      "median_ms": 0.560125,
+      "min_ms": 0.523875,
+      "max_ms": 0.795833
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.571583,
+        0.694,
+        0.698583,
+        0.678375,
+        0.542208
+      ],
+      "median_ms": 0.678375,
+      "min_ms": 0.542208,
+      "max_ms": 0.698583
+    }
+  },
+  {
+    "workload": "cached_list_rich",
+    "messages": 200,
+    "baseline": {
+      "pair_medians_ms": [
+        0.580583,
+        0.622958,
+        0.525792,
+        0.664333,
+        1.021125
+      ],
+      "median_ms": 0.622958,
+      "min_ms": 0.525792,
+      "max_ms": 1.021125
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        1.821709,
+        0.571,
+        0.592,
+        0.616875,
+        0.495083
+      ],
+      "median_ms": 0.592,
+      "min_ms": 0.495083,
+      "max_ms": 1.821709
+    }
+  },
+  {
+    "workload": "cached_list_rich",
+    "messages": 2000,
+    "baseline": {
+      "pair_medians_ms": [
+        0.51675,
+        0.585292,
+        0.8715,
+        0.604959,
+        0.612416
+      ],
+      "median_ms": 0.604959,
+      "min_ms": 0.51675,
+      "max_ms": 0.8715
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.705833,
+        0.639791,
+        0.641375,
+        0.641375,
+        0.718334
+      ],
+      "median_ms": 0.641375,
+      "min_ms": 0.639791,
+      "max_ms": 0.718334
+    }
+  },
+  {
+    "workload": "cold_cached_conversation_plain",
+    "messages": 200,
+    "baseline": {
+      "pair_medians_ms": [
+        3.050209,
+        2.784792,
+        3.295584,
+        2.986583,
+        3.333417
+      ],
+      "median_ms": 3.050209,
+      "min_ms": 2.784792,
+      "max_ms": 3.333417
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        4.850959,
+        3.227042,
+        3.033333,
+        2.710625,
+        3.079125
+      ],
+      "median_ms": 3.079125,
+      "min_ms": 2.710625,
+      "max_ms": 4.850959
+    }
+  },
+  {
+    "workload": "cold_cached_conversation_plain",
+    "messages": 2000,
+    "baseline": {
+      "pair_medians_ms": [
+        21.229125,
+        20.084542,
+        22.23375,
+        20.439709,
+        20.619625
+      ],
+      "median_ms": 20.619625,
+      "min_ms": 20.084542,
+      "max_ms": 22.23375
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        24.235541,
+        23.512,
+        22.091084,
+        21.272209,
+        21.025792
+      ],
+      "median_ms": 22.091084,
+      "min_ms": 21.025792,
+      "max_ms": 24.235541
+    }
+  },
+  {
+    "workload": "cold_cached_conversation_rich",
+    "messages": 200,
+    "baseline": {
+      "pair_medians_ms": [
+        81.53075,
+        80.792,
+        84.541875,
+        80.030334,
+        106.271917
+      ],
+      "median_ms": 81.53075,
+      "min_ms": 80.030334,
+      "max_ms": 106.271917
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        100.240792,
+        87.153375,
+        84.741625,
+        81.414125,
+        80.502083
+      ],
+      "median_ms": 84.741625,
+      "min_ms": 80.502083,
+      "max_ms": 100.240792
+    }
+  },
+  {
+    "workload": "cold_cached_conversation_rich",
+    "messages": 2000,
+    "baseline": {
+      "pair_medians_ms": [
+        778.153,
+        783.314958,
+        864.172292,
+        779.902083,
+        863.991416
+      ],
+      "median_ms": 783.314958,
+      "min_ms": 778.153,
+      "max_ms": 864.172292
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        820.845209,
+        785.089667,
+        806.157583,
+        760.67925,
+        761.166083
+      ],
+      "median_ms": 785.089667,
+      "min_ms": 760.67925,
+      "max_ms": 820.845209
+    }
+  },
+  {
+    "workload": "viewport30_actions_plain",
+    "messages": 200,
+    "baseline": {
+      "pair_medians_ms": [
+        4.7673125,
+        4.5595835000000005,
+        4.7636875,
+        4.4770835,
+        4.616417
+      ],
+      "median_ms": 4.616417,
+      "min_ms": 4.4770835,
+      "max_ms": 4.7673125
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.1183125,
+        0.1130205,
+        0.11081250000000001,
+        0.108,
+        0.113563
+      ],
+      "median_ms": 0.1130205,
+      "min_ms": 0.108,
+      "max_ms": 0.1183125
+    }
+  },
+  {
+    "workload": "viewport30_actions_plain",
+    "messages": 2000,
+    "baseline": {
+      "pair_medians_ms": [
+        47.093937499999996,
+        47.591167,
+        47.8673745,
+        48.547125,
+        48.2035
+      ],
+      "median_ms": 47.8673745,
+      "min_ms": 47.093937499999996,
+      "max_ms": 48.547125
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.1138335,
+        0.10918749999999999,
+        0.108854,
+        0.108271,
+        0.113646
+      ],
+      "median_ms": 0.10918749999999999,
+      "min_ms": 0.108271,
+      "max_ms": 0.1138335
+    }
+  },
+  {
+    "workload": "viewport30_actions_rich",
+    "messages": 200,
+    "baseline": {
+      "pair_medians_ms": [
+        15.627167,
+        15.849917,
+        16.840521000000003,
+        16.036333499999998,
+        18.05575
+      ],
+      "median_ms": 16.036333499999998,
+      "min_ms": 15.627167,
+      "max_ms": 18.05575
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.114792,
+        0.10775,
+        0.1081455,
+        0.107521,
+        0.10885449999999999
+      ],
+      "median_ms": 0.1081455,
+      "min_ms": 0.107521,
+      "max_ms": 0.114792
+    }
+  },
+  {
+    "workload": "viewport30_actions_rich",
+    "messages": 2000,
+    "baseline": {
+      "pair_medians_ms": [
+        62.5642505,
+        62.2178335,
+        65.70372900000001,
+        61.9458755,
+        61.260125
+      ],
+      "median_ms": 62.2178335,
+      "min_ms": 61.260125,
+      "max_ms": 65.70372900000001
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.10956250000000001,
+        0.109125,
+        0.1097505,
+        0.10947899999999999,
+        0.1093125
+      ],
+      "median_ms": 0.10947899999999999,
+      "min_ms": 0.109125,
+      "max_ms": 0.1097505
+    }
+  },
+  {
+    "workload": "warm_cached_conversation_plain",
+    "messages": 200,
+    "baseline": {
+      "pair_medians_ms": [
+        0.006042,
+        0.007334,
+        0.022458,
+        0.004667,
+        0.007125
+      ],
+      "median_ms": 0.007125,
+      "min_ms": 0.004667,
+      "max_ms": 0.022458
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.0145,
+        0.007125,
+        0.01675,
+        0.004542,
+        0.008625
+      ],
+      "median_ms": 0.008625,
+      "min_ms": 0.004542,
+      "max_ms": 0.01675
+    }
+  },
+  {
+    "workload": "warm_cached_conversation_plain",
+    "messages": 2000,
+    "baseline": {
+      "pair_medians_ms": [
+        0.010584,
+        0.007208,
+        0.02125,
+        0.007875,
+        0.010792
+      ],
+      "median_ms": 0.010584,
+      "min_ms": 0.007208,
+      "max_ms": 0.02125
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.052458,
+        0.024417,
+        0.012667,
+        0.006791,
+        0.005625
+      ],
+      "median_ms": 0.012667,
+      "min_ms": 0.005625,
+      "max_ms": 0.052458
+    }
+  },
+  {
+    "workload": "warm_cached_conversation_rich",
+    "messages": 200,
+    "baseline": {
+      "pair_medians_ms": [
+        0.01025,
+        0.016125,
+        0.018625,
+        0.015917,
+        0.026792
+      ],
+      "median_ms": 0.016125,
+      "min_ms": 0.01025,
+      "max_ms": 0.026792
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.015667,
+        0.025208,
+        0.017334,
+        0.016333,
+        0.030458
+      ],
+      "median_ms": 0.017334,
+      "min_ms": 0.015667,
+      "max_ms": 0.030458
+    }
+  },
+  {
+    "workload": "warm_cached_conversation_rich",
+    "messages": 2000,
+    "baseline": {
+      "pair_medians_ms": [
+        0.042791,
+        0.027375,
+        0.037125,
+        0.021166,
+        0.031833
+      ],
+      "median_ms": 0.031833,
+      "min_ms": 0.021166,
+      "max_ms": 0.042791
+    },
+    "candidate": {
+      "pair_medians_ms": [
+        0.026333,
+        0.026334,
+        0.034792,
+        0.020209,
+        0.036625
+      ],
+      "median_ms": 0.026334,
+      "min_ms": 0.020209,
+      "max_ms": 0.036625
+    }
+  }
+]

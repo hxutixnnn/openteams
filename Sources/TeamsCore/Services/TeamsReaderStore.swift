@@ -77,6 +77,7 @@ public final class TeamsReaderStore {
     private var histories: [String: TeamsCachedHistory] = [:]
     private struct RenderingInputs {
         let messages: [TeamsWebMessage]
+        let messageIndices: [String: Int]
         let people: [String: Person]
         let accountScope: String
         let accountRevision: UUID
@@ -889,7 +890,7 @@ public final class TeamsReaderStore {
     }
 
     public func canEditMessage(in chatID: String, messageID: String) -> Bool {
-        guard let type = histories[chatID]?.messages.first(where: { $0.id == messageID })?.messageType else { return false }
+        guard let type = historyMessage(in: chatID, id: messageID)?.messageType else { return false }
         return deletionStages[ReactionTarget(chat: chatID, message: messageID)] == nil && (type == "Text" || type == "RichText/Html")
     }
 
@@ -1127,7 +1128,7 @@ public final class TeamsReaderStore {
         guard connected, !sessionExpired, session?.messaging != nil, !loadingChatIDs.contains(chatID),
               retryNotBefore.map({ $0 <= Date() }) ?? true,
               let chat = conversation(chatID), chat.isDisabled != true, chat.isConversationDeleted != true,
-              let message = renderedMessages[chatID]?.first(where: { $0.id == messageID }) ?? (contextChatID == chatID ? contextMessages.first(where: { $0.id == messageID }) : nil), !message.isDeleted else { return false }
+              let message = renderedMessage(in: chatID, id: messageID) ?? (contextChatID == chatID ? contextMessages.first(where: { $0.id == messageID }) : nil), !message.isDeleted else { return false }
         return !reacting.contains(target) && !reactionsAwaitingRefresh.contains(target)
     }
 
@@ -1148,7 +1149,7 @@ public final class TeamsReaderStore {
     }
     public func canDelete(in chatID: String, messageID: String) -> Bool {
         let stage = deletionStage(in: chatID, messageID: messageID)
-        guard let message = histories[chatID]?.messages.first(where: { $0.id == messageID }), !TeamsRenderedMessage(message, people: [:]).isDeleted else { return false }
+        guard let message = historyMessage(in: chatID, id: messageID), !TeamsRenderedMessage.isDeleted(message) else { return false }
         return connected && session?.messaging != nil && (retryNotBefore.map { $0 <= Date() } ?? true) && (stage == nil || stage == .rejected)
     }
     public func loadDeletionStatus(in chatID: String, messageID: String, expectedScope: String, expectedRevision: UUID) async {
@@ -1689,6 +1690,22 @@ public final class TeamsReaderStore {
         return .attempted
     }
 
+    private func historyMessage(in chatID: String, id: String) -> TeamsWebMessage? {
+        guard let messages = histories[chatID]?.messages else { return nil }
+        if let index = renderingInputs[chatID]?.messageIndices[id], messages.indices.contains(index), messages[index].id == id {
+            return messages[index]
+        }
+        return messages.first { $0.id == id }
+    }
+
+    private func renderedMessage(in chatID: String, id: String) -> TeamsRenderedMessage? {
+        guard let messages = renderedMessages[chatID] else { return nil }
+        if let index = renderingInputs[chatID]?.messageIndices[id], messages.indices.contains(index), messages[index].id == id {
+            return messages[index]
+        }
+        return messages.first { $0.id == id }
+    }
+
     private func render(_ id: String) {
         let messages = histories[id]?.messages ?? []
         composer.reconcile(messages, in: id)
@@ -1712,7 +1729,8 @@ public final class TeamsReaderStore {
             if let cached = reusable[message.id], cached.raw == message { return cached.rendered }
             return TeamsRenderedMessage(message, people: people, accountScope: accountScope, accountRevision: accountRevision, chatID: id)
         }
-        renderingInputs[id] = RenderingInputs(messages: messages, people: people, accountScope: accountScope, accountRevision: accountRevision)
+        let messageIndices = Dictionary(messages.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
+        renderingInputs[id] = RenderingInputs(messages: messages, messageIndices: messageIndices, people: people, accountScope: accountScope, accountRevision: accountRevision)
         if renderedMessages[id] != rendered { renderedMessages[id] = rendered }
     }
 

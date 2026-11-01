@@ -1,0 +1,32 @@
+import argparse
+from pathlib import Path
+import subprocess
+import tempfile
+
+
+parser = argparse.ArgumentParser(description="Verify fictional deletion through the production transport/store/cache workflow, without native UI.")
+parser.add_argument("--skip-build", action="store_true")
+arguments = parser.parse_args()
+repository = Path(__file__).resolve().parent.parent
+if not arguments.skip_build:
+    subprocess.run(["swift", "build", "--jobs", "4", "--product", "OpenTeams"], cwd=repository, check=True, timeout=600)
+products = Path(subprocess.check_output(["swift", "build", "--show-bin-path"], cwd=repository, text=True).strip())
+modules = products / "Modules" if (products / "Modules").is_dir() else products
+objects = []
+for module in ["TeamsCore", "SwiftSoup"]:
+    product_object = products / (module + ".o")
+    module_objects = [product_object] if product_object.is_file() else sorted((products / (module + ".build")).glob("*.o"))
+    if not module_objects:
+        raise SystemExit("Missing build objects for " + module)
+    objects.extend(module_objects)
+source = (repository / "Sources/TeamsChat/Views/TeamsPerformanceFixtureView.swift").read_text()
+transport = source.split("private actor PerformanceFixtureTransport:", 1)[1].split("@MainActor @Observable private final class PerformanceFixtureController", 1)[0]
+workflow = (repository / "Tests/E2E/FixtureDeletion/Workflow.swift").read_text()
+if "init(allowsSend: Bool)" in transport:
+    workflow = workflow.replace("PerformanceFixtureTransport()", "PerformanceFixtureTransport(allowsSend: false)")
+with tempfile.TemporaryDirectory(prefix="openteams-deletion-e2e-") as directory:
+    generated = Path(directory) / "FixtureDeletion.swift"
+    generated.write_text("import Foundation\nimport TeamsCore\nprivate actor PerformanceFixtureTransport:" + transport + workflow)
+    executable = Path(directory) / "FixtureDeletion"
+    subprocess.run(["swiftc", "-parse-as-library", "-swift-version", "6", "-Onone", "-I", str(modules), str(generated), *map(str, objects), "-o", str(executable)], cwd=repository, check=True, timeout=120)
+    subprocess.run([str(executable)], cwd=repository, check=True, timeout=30)
