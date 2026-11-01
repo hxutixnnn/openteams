@@ -188,6 +188,9 @@ public final class TeamsReaderStore {
     }
 
     public func disconnect() {
+        #if DEBUG
+        cachedLoadGate?.invalidate(reason: "disconnected")
+        #endif
         closeMessageContext()
         generation = UUID()
         markingRead = [:]
@@ -1502,6 +1505,7 @@ public final class TeamsReaderStore {
     }
 
     #if DEBUG
+    @ObservationIgnored public var cachedLoadGate: TeamsCachedLoadGate?
     @ObservationIgnored public var onCachedLoadTiming: (@MainActor (String, Double, Bool) -> Void)?
     #endif
 
@@ -1526,6 +1530,14 @@ public final class TeamsReaderStore {
                 #endif
                 if renderedMessages[id] == nil {
                     let people = renderingPeople(in: id), scope = accountScope, epoch = accountRevision
+                    #if DEBUG
+                    let gate = cachedLoadGate
+                    let request = TeamsCachedLoadGate.Request(accountScope: scope, accountRevision: epoch, generation: current, chatID: id)
+                    var preparationCompleted = false
+                    defer { gate?.complete(request, cancelled: !preparationCompleted) }
+                    try await gate?.wait(request)
+                    guard current == generation, epoch == accountRevision, !Task.isCancelled else { return }
+                    #endif
                     let prepared = try await cachedMessageRenderer.render(history.messages, people: people, accountScope: scope, accountRevision: epoch, chatID: id)
                     guard current == generation, !Task.isCancelled else { return }
                     #if DEBUG
@@ -1541,6 +1553,7 @@ public final class TeamsReaderStore {
                     }
                     #if DEBUG
                     onCachedLoadTiming?("publication", cachedLoadMilliseconds(since: publicationStart), true)
+                    preparationCompleted = true
                     #endif
                 }
             } catch {
@@ -1631,6 +1644,9 @@ public final class TeamsReaderStore {
     }
 
     private func resetAccount(accountID: String, tenantID: String, displayName: String) {
+        #if DEBUG
+        cachedLoadGate?.invalidate(reason: "account_changed")
+        #endif
         accountRevision = UUID()
         closeMessageContext()
         generation = UUID()
