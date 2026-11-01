@@ -22,22 +22,45 @@ private actor PerformanceFixtureTransport: HTTPTransport {
     private var newest = 100
     private var deleted: Set<String> = []
     private var edits: [String: TeamsWebMessage] = [:]
+    private var likedAccounts: Set<String> = []
 
     func append() { newest += 1 }
 
-    private func message(_ index: Int) -> TeamsWebMessage {
+    private func message(_ index: Int, account: String) -> TeamsWebMessage {
         let id = String(1_800_000_000_000 + index)
         if let edited = edits[id] { return edited }
-        return TeamsWebMessage(id: id, content: "Fictional message \(index)", messageType: "Text",
-            imDisplayName: "Alex Example", from: .string("8:orgid:fixture-a"),
+        var properties: [String: TeamsWebJSONValue] = [:]
+        if deleted.contains(id) { properties["deletetime"] = .number(1) }
+        if index == 50, likedAccounts.contains(account) {
+            properties["emotions"] = .array([.object([
+                "key": .string("like"), "users": .array([.object(["mri": .string("8:orgid:" + account)])])
+            ])])
+        }
+        let content: String
+        if index == 99 {
+            content = #"""
+            <blockquote itemscope="" itemtype="http://schema.skype.com/Reply" itemid="1800000000050"><strong itemprop="mri" itemid="8:orgid:ada">Ada Example</strong><span itemprop="time" itemid="1800000000050"></span><p itemprop="preview">Context-only message 50</p></blockquote><p>Fictional message 99</p>
+            """#
+        } else {
+            content = index == 50 ? "Context-only message 50 · \(account)" : "Fictional message \(index)"
+        }
+        return TeamsWebMessage(id: id, content: content, messageType: index == 99 ? "RichText/Html" : "Text",
+            imDisplayName: index == 50 ? "Ada Example" : "Alex Example", from: .string(index == 50 ? "8:orgid:ada" : "8:orgid:fixture-a"),
             originalArrivalTime: id, composeTime: "2026-11-01T00:00:00Z", version: "1",
-            properties: deleted.contains(id) ? .object(["deletetime": .number(1)]) : nil)
+            properties: properties.isEmpty ? nil : .object(properties))
     }
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        guard let url = request.url else { throw URLError(.badURL) }
+        guard let url = request.url, url.scheme == "https", url.host == "teams.cloud.microsoft" else { throw URLError(.badURL) }
+        let account: String
+        switch request.value(forHTTPHeaderField: "Authorization") {
+        case "Bearer fictional-only-fixture-a": account = "fixture-a"
+        case "Bearer fictional-only-fixture-b": account = "fixture-b"
+        default: throw URLError(.userAuthenticationRequired)
+        }
         let method = request.httpMethod ?? "GET"
         let components = url.pathComponents
+        let contextMessagePath = "/api/chatsvc/fixture/v1/users/ME/conversations/fixture-one/messages/"
         let data: Data
         var status = 200
         if method == "GET", url.path.hasSuffix("/chats") {
@@ -48,12 +71,30 @@ private actor PerformanceFixtureTransport: HTTPTransport {
             ]))
         } else if method == "GET", url.path.hasSuffix("/conversationFolders") {
             data = try JSONEncoder().encode(TeamsConversationFolders(conversationFolders: [], conversationFolderOrder: [], isPartialResponse: false))
+        } else if method == "GET", url.path == contextMessagePath + "epochTimeStamp/1800000000050" {
+            let original = message(50, account: account)
+            data = try JSONEncoder().encode(["messages": TeamsWebJSONValue.array([.object([
+                "id": .string(original.id), "content": .string(original.content ?? ""),
+                "messagetype": .string("Text"), "imdisplayname": .string("Ada Example"),
+                "from": .string("8:orgid:ada"), "originalarrivaltime": .string(original.id),
+                "composetime": .string("2026-11-01T00:00:00Z"), "version": .string("1"),
+                "properties": original.properties ?? .object([:])
+            ])])])
+        } else if method == "GET", url.path == "/api/csa/fixture/api/v1/chats/fixture-one/messages/1800000000050" {
+            data = try JSONEncoder().encode(message(50, account: account))
+        } else if (method == "PUT" || method == "DELETE"), url.path == contextMessagePath + "1800000000050/properties",
+                  URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems == [.init(name: "name", value: "emotions")] {
+            let body = try JSONDecoder().decode([String: TeamsWebJSONValue].self, from: request.httpBody ?? Data())
+            guard case let .object(emotion)? = body["emotions"], emotion["key"]?.stringValue == "like" else { throw URLError(.badServerResponse) }
+            if method == "PUT" { likedAccounts.insert(account) }
+            else { likedAccounts.remove(account) }
+            data = Data("{}".utf8)
         } else if method == "GET", url.path.hasSuffix("/messages") {
             let older = request.value(forHTTPHeaderField: "x-ms-messageToken") == "older"
-            let messages = (older ? 61...80 : 81...newest).map(message)
+            let messages = (older ? 61...80 : 81...newest).map { message($0, account: account) }
             data = try JSONEncoder().encode(TeamsWebMessagePage(messages: messages, messageToken: older ? nil : "older"))
         } else if let position = components.firstIndex(of: "messages"), components.count == position + 2,
-                  let index = Int(components[position + 1]), (1...200).contains(index - 1_800_000_000_000) {
+                  let index = Int(components[position + 1]), (61...200).contains(index - 1_800_000_000_000) {
             let id = components[position + 1]
             if method == "DELETE" { deleted.insert(id) }
             if method == "PUT" {
@@ -63,7 +104,7 @@ private actor PerformanceFixtureTransport: HTTPTransport {
                     from: .string("8:orgid:fixture-a"), originalArrivalTime: id,
                     composeTime: "2026-11-01T00:00:00Z", version: "2", properties: body["properties"])
             }
-            data = method == "GET" ? try JSONEncoder().encode(message(index - 1_800_000_000_000)) : Data("{}".utf8)
+            data = method == "GET" ? try JSONEncoder().encode(message(index - 1_800_000_000_000, account: account)) : Data("{}".utf8)
         } else if method == "PUT", url.path.hasSuffix("/properties"), !components.contains("messages") {
             data = Data("{}".utf8)
         } else {
@@ -91,9 +132,9 @@ private actor PerformanceFixtureTransport: HTTPTransport {
         busy = true
         defer { busy = false }
         await store.connect(session: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/csa/fixture")!,
-            accessToken: "fictional-only", expiresAt: .distantFuture, accountID: account, tenantID: "fixture-tenant",
+            accessToken: "fictional-only-" + account, expiresAt: .distantFuture, accountID: account, tenantID: "fixture-tenant",
             displayName: account, messaging: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/chatsvc/fixture")!,
-                accessToken: "fictional-only", expiresAt: .distantFuture)))
+                accessToken: "fictional-only-" + account, expiresAt: .distantFuture)))
         ready = true
     }
 
