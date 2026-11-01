@@ -1,0 +1,44 @@
+--- a/Sources/TeamsCore/Services/TeamsReaderStore.swift
++++ b/Sources/TeamsCore/Services/TeamsReaderStore.swift
+@@ -1492,12 +1492,18 @@
+         }
+     }
+
++    #if DEBUG
++    @ObservationIgnored public var onCachedLoadTiming: (@MainActor (String, Double, Bool) -> Void)?
++    #endif
++
+     public func loadConversation(_ id: String) async {
+         Task { await self.refreshGroupPictureMetadata(id) }
+         let current = generation
+         if histories[id] == nil, let cache {
+             do {
++                let cacheStart = ContinuousClock.now
+                 let history = try await cache.history(in: id)
++                onCachedLoadTiming?("cache_read", Self.milliseconds(since: cacheStart), false)
+                 guard current == generation, !Task.isCancelled else { return }
+                 histories[id] = history
+                 render(id)
+@@ -1725,13 +1731,22 @@
+                 reusable[raw.id] = (raw, rendered)
+             }
+         }
++        let conversionStart = ContinuousClock.now
+         let rendered = messages.map { message in
+             if let cached = reusable[message.id], cached.raw == message { return cached.rendered }
+             return TeamsRenderedMessage(message, people: people, accountScope: accountScope, accountRevision: accountRevision, chatID: id)
+         }
++        onCachedLoadTiming?("conversion", Self.milliseconds(since: conversionStart), Thread.isMainThread)
++        let publicationStart = ContinuousClock.now
+         let messageIndices = Dictionary(messages.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
+         renderingInputs[id] = RenderingInputs(messages: messages, messageIndices: messageIndices, people: people, accountScope: accountScope, accountRevision: accountRevision)
+         if renderedMessages[id] != rendered { renderedMessages[id] = rendered }
++        onCachedLoadTiming?("publication", Self.milliseconds(since: publicationStart), Thread.isMainThread)
++    }
++
++    private static func milliseconds(since start: ContinuousClock.Instant) -> Double {
++        let duration = start.duration(to: .now).components
++        return Double(duration.seconds) * 1000 + Double(duration.attoseconds) / 1e15
+     }
+
+     private func availableClient() -> TeamsWebClient? {

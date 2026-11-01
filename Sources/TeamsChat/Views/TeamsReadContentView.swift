@@ -8,6 +8,10 @@ struct TeamsReadContentView: View {
     var notificationRouter: TeamsNotificationRouter
     let connect: () -> Void
     var persistSelection = true
+    #if DEBUG
+    var fixtureStartupConversation: PerformanceFixtureStartupConversation? = nil
+    @ViewState<String> private var fixtureStartupAccountScope = ""
+    #endif
     var loadFilePreview: ((TeamsSharePointAttachment) async throws -> Data)? = nil
     @Environment(\.scenePhase) private var scenePhase
     @SceneStorage("teamsSelectedChat") private var selectedID = ""
@@ -29,7 +33,11 @@ struct TeamsReadContentView: View {
 
     private var selectedChat: TeamsWebChat? { store.conversation(selectedID) }
     private var windowKey: String { "\(scenePhase == .active)-\(store.connected)-\(store.accountScope)-\(selectionAccount)-\(selectedID)" }
+    #if DEBUG
+    private var conversationKey: String { "\(store.accountScope)-\(store.connected)-\(selectedID)" + (fixtureStartupConversation == .planning ? "-" + fixtureStartupAccountScope : "") }
+    #else
     private var conversationKey: String { "\(store.accountScope)-\(store.connected)-\(selectedID)" }
+    #endif
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -92,6 +100,13 @@ struct TeamsReadContentView: View {
         .onChange(of: store.accountScope, initial: true) { _, accountScope in
             newChatPresentation = nil
             guard !store.accountID.isEmpty else { return }
+            #if DEBUG
+            if !persistSelection, fixtureStartupConversation == .planning {
+                selectedID = ""
+                selectionAccount = ""
+                fixtureStartupAccountScope = accountScope
+            }
+            #endif
             if selectionAccount != accountScope {
                 selectedID = persistSelection && lastSelectedAccount == accountScope ? lastSelectedChat : ""
                 selectionAccount = accountScope
@@ -116,6 +131,9 @@ struct TeamsReadContentView: View {
             }
         }
         .task(id: conversationKey) {
+            #if DEBUG
+            if fixtureStartupConversation == .planning && fixtureStartupAccountScope != store.accountScope { return }
+            #endif
             guard !selectedID.isEmpty, !store.accountID.isEmpty else { return }
             await store.loadConversation(selectedID)
         }
@@ -199,6 +217,13 @@ struct TeamsReadContentView: View {
 
     private func reconcileSelection() {
         guard !store.isLoadingChats else { return }
+        #if DEBUG
+        if !persistSelection, let fixtureStartupConversation, selectedChat == nil,
+           let first = fixtureStartupConversation.initialChat(in: store.chats) {
+            selectedID = first.id
+            return
+        }
+        #endif
         if selectedChat == nil, let first = store.chats.first(where: { $0.hidden != true && $0.isConversationDeleted != true }) {
             selectedID = first.id
         }
