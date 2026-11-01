@@ -18,25 +18,34 @@ struct TeamsChatApp: App {
     init() {
         #if DEBUG
         let showcase = ProcessInfo.processInfo.arguments.contains("--showcase")
+        let isolated = TeamsPerformanceFixtureConfiguration.enabled
+        let isolatedRoot = TeamsPerformanceFixtureConfiguration.root
         #else
         let showcase = false
+        let isolated = false
+        let isolatedRoot: URL? = nil
         #endif
         showcaseDefaults = showcase ? UserDefaults(suiteName: "OpenTeams.showcase." + UUID().uuidString) : nil
-        _store = ViewState(initialValue: FixtureChatStore(draftURL: showcase ? nil : URL.applicationSupportDirectory
+        _store = ViewState(initialValue: FixtureChatStore(draftURL: showcase || isolated ? nil : URL.applicationSupportDirectory
             .appending(path: "TeamsChat/demo-drafts.json")))
-        let reader = TeamsReaderStore(cacheRoot: URL.applicationSupportDirectory.appending(path: "TeamsChat/ReadCache"))
+        let cacheRoot = isolated ? (isolatedRoot ?? FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)) : URL.applicationSupportDirectory.appending(path: "TeamsChat/ReadCache")
+        let reader = TeamsReaderStore(cacheRoot: cacheRoot)
         let access: any TeamsCredentialAccess
-        if !showcase, let fingerprint = Bundle.main.object(forInfoDictionaryKey: "TeamsSigningCertificate") as? String,
+        if !showcase, !isolated, let fingerprint = Bundle.main.object(forInfoDictionaryKey: "TeamsSigningCertificate") as? String,
            let bridge = try? TeamsCredentialBridge(certificate: fingerprint) {
             access = TeamsHelperCredentialAccess(bridge: bridge)
         } else { access = TeamsUnavailableCredentialAccess() }
-        _connection = ViewState(initialValue: TeamsConnection(reader: reader, credentialStore: access))
+        _connection = ViewState(initialValue: TeamsConnection(reader: reader, credentialStore: access,
+            defaults: isolated ? UserDefaults(suiteName: "OpenTeams.fixture." + UUID().uuidString)! : .standard))
     }
 
     var body: some Scene {
         WindowGroup("OpenTeams", id: "chat") {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--showcase"), let showcaseDefaults {
+            if TeamsPerformanceFixtureConfiguration.enabled {
+                TeamsPerformanceFixtureView()
+                    .defaultAppStorage(TeamsPerformanceFixtureConfiguration.defaults)
+            } else if ProcessInfo.processInfo.arguments.contains("--showcase"), let showcaseDefaults {
                 ContentView(store: store, showcaseDetails: ProcessInfo.processInfo.arguments.contains("--showcase-dark"))
                     .defaultAppStorage(showcaseDefaults)
                     .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--showcase-dark") ? .dark : nil)
@@ -79,8 +88,17 @@ struct TeamsChatApp: App {
         .commands { ChatCommands() }
 
         Settings {
+            #if DEBUG
+            if TeamsPerformanceFixtureConfiguration.enabled {
+                Text("Account connections are disabled in the isolated fixture.").padding()
+            } else {
+                SettingsView(connection: connection)
+                    .tint(ChatTheme.accent)
+            }
+            #else
             SettingsView(connection: connection)
                 .tint(ChatTheme.accent)
+            #endif
         }
 
         WindowGroup("Sample Workspace", id: "demo") {
@@ -125,6 +143,12 @@ private struct TeamsChatRoot: View {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if TeamsPerformanceFixtureConfiguration.enabled {
+            NSApp.setActivationPolicy(.accessory)
+            return
+        }
+        #endif
         NSApp.setActivationPolicy(.regular)
         UNUserNotificationCenter.current().delegate = self
         NSApp.activate(ignoringOtherApps: true)

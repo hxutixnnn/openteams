@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 
 
-parser = argparse.ArgumentParser(description="Run isolated application-core E2E workflows without launching the GUI or accessing real accounts.")
+parser = argparse.ArgumentParser(description="Run isolated core workflows and benchmarks. These do not replace app-level E2E verification.")
 parser.add_argument("--skip-build", action="store_true")
 parser.add_argument("--scenario", choices=["ComposerPersistence", "ComposerWorkload", "LoadingInteractions"])
 arguments = parser.parse_args()
@@ -38,4 +38,4 @@ with tempfile.TemporaryDirectory(prefix="openteams-performance-e2e-") as directo
         run(["swiftc", "-parse-as-library", "-swift-version", "6", "-Onone", "-I", module_path, source, *objects, "-o", executable])
         run([executable])
 
-print("All application-core E2E workflows passed.")
+print("All core workflows passed. App-level E2E verification is separate; see Tests/E2E/APP.md.")
