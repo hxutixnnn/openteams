@@ -20,7 +20,6 @@ struct TeamsReadDetailView: View {
     let focusRequest: UUID
     var loadFilePreview: ((TeamsSharePointAttachment) async throws -> Data)? = nil
     @AppStorage("compactMessages") private var compact = false
-    @ViewState<String?> private var visibleMessageID: String? = nil
     @ViewState<String?> private var restoreAnchor: String? = nil
     @ViewState<Int> private var newMessageCount = 0
     @ViewState<Bool> private var positionedInitialMessages = false
@@ -185,8 +184,8 @@ struct TeamsReadDetailView: View {
                 .background {
                     if useLegacyObserver {
                         TeamsLegacyScrollObserver(changed: { value in
-                            atBottom = value
-                            if value { newMessageCount = 0 }
+                            if atBottom != value { atBottom = value }
+                            if value, newMessageCount != 0 { newMessageCount = 0 }
                         }, grewAtBottom: {
                             guard restoreAnchor == nil, let last = messages.last?.id else { return }
                             scheduleAutomaticScroll(proxy, to: last, initial: false)
@@ -199,8 +198,8 @@ struct TeamsReadDetailView: View {
                 }
             }
             .modifier(TeamsBottomObserver(enabled: !useLegacyObserver, changed: { value in
-                atBottom = value
-                if value { newMessageCount = 0 }
+                if atBottom != value { atBottom = value }
+                if value, newMessageCount != 0 { newMessageCount = 0 }
             }, grewAtBottom: {
                 guard restoreAnchor == nil, let last = messages.last?.id else { return }
                 scheduleAutomaticScroll(proxy, to: last, initial: false)
@@ -214,7 +213,6 @@ struct TeamsReadDetailView: View {
                     scheduleAutomaticScroll(proxy, to: last, initial: false)
                 }
             }
-            .scrollPosition(id: $visibleMessageID, anchor: .top)
             .defaultScrollAnchor(.bottom)
             .overlay(alignment: .topLeading) {
                 #if DEBUG
