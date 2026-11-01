@@ -39,13 +39,20 @@ public final class TeamsComposeStore {
     private var generation = UUID()
     private let root: URL
     private let transport: any HTTPTransport
+    @ObservationIgnored private var lastSavedState: SavedState?
+    @ObservationIgnored private var encodedRichDrafts: [String: EncodedRichDraft] = [:]
 
-    private struct SavedState: Codable {
+    private struct SavedState: Codable, Equatable {
         let accountKey: String
         let drafts: [String: String]
         let outgoing: [String: TeamsOutgoingMessage]
         let replies: [String: TeamsReplyDraft]?
         let richDrafts: [String: TeamsRichDraft]?
+    }
+
+    private struct EncodedRichDraft {
+        let draft: TeamsRichDraft
+        let member: Data
     }
 
     public init(root: URL, transport: any HTTPTransport = TeamsWebURLSessionTransport()) {
@@ -62,6 +69,7 @@ public final class TeamsComposeStore {
         session = nil
         drafts = [:]; replies = [:]; richDrafts = [:]; outgoing = [:]; errors = [:]; preparing = []; draftRevisions = [:]; preparationRevisions = [:]
         retryNotBefore = nil; persistenceError = nil
+        lastSavedState = nil; encodedRichDrafts = [:]
         let file = root.appendingPathComponent(key + ".json")
         guard FileManager.default.fileExists(atPath: file.path) else { return }
         do {
@@ -230,14 +238,44 @@ public final class TeamsComposeStore {
 
     private func persist() {
         guard !accountKey.isEmpty else { return }
+        let state = SavedState(accountKey: accountKey, drafts: drafts, outgoing: outgoing, replies: replies, richDrafts: richDrafts)
+        guard state != lastSavedState || persistenceError != nil else { return }
         do {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let data = try JSONEncoder().encode(SavedState(accountKey: accountKey, drafts: drafts, outgoing: outgoing, replies: replies, richDrafts: richDrafts))
+            let data = try encodedState(state)
             guard data.count <= 2_000_000 else { throw TeamsWebClientError.messageTooLarge }
             let file = root.appendingPathComponent(accountKey + ".json")
             try data.write(to: file, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            lastSavedState = state
             persistenceError = nil
-        } catch { persistenceError = "Draft changes could not be saved on this Mac." }
+        } catch {
+            encodedRichDrafts = [:]
+            persistenceError = "Draft changes could not be saved on this Mac."
+        }
+    }
+
+    private func encodedState(_ state: SavedState) throws -> Data {
+        let encoder = JSONEncoder()
+        var data = try encoder.encode(SavedState(accountKey: state.accountKey, drafts: state.drafts,
+                                                outgoing: state.outgoing, replies: state.replies, richDrafts: nil))
+        data.removeLast()
+        data.append(contentsOf: ",\"richDrafts\":{".utf8)
+        let richDrafts = state.richDrafts ?? [:]
+        for key in encodedRichDrafts.keys.filter({ richDrafts[$0] == nil }) { encodedRichDrafts[key] = nil }
+        var first = true
+        for (chatID, rich) in richDrafts {
+            let member: Data
+            if let cached = encodedRichDrafts[chatID], cached.draft == rich { member = cached.member }
+            else {
+                member = Data(try encoder.encode([chatID: rich]).dropFirst().dropLast())
+                encodedRichDrafts[chatID] = EncodedRichDraft(draft: rich, member: member)
+            }
+            if !first { data.append(UInt8(ascii: ",")) }
+            data.append(member)
+            first = false
+        }
+        data.append(contentsOf: "}}".utf8)
+        return data
     }
 }

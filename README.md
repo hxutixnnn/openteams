@@ -33,12 +33,14 @@ To install the signed local build in `/Applications`:
 
 The installer checks the signature and pinned credential helper before copying. If replacing a matching installation, it retains the previous app in a hidden staging directory under `/Applications`; it refuses to replace an unrelated app. It does not change your sign-in or local data. The icon source is in `assets/icon/`; run `./script/build_icon.sh` after changing it to regenerate the bundled icon.
 
-To check the build and run the test suite:
+To build without stopping or launching the app and run the isolated performance E2E workflows:
 
 ```sh
-./script/build_and_run.sh --verify
-./script/test.sh
+swift build --jobs 4 --product OpenTeams
+python3 script/test_performance_e2e.py --skip-build
 ```
+
+These application-core workflows exercise fictional chat histories, account-scoped temporary storage, draft recovery in separate processes, and intercepted send requests. They never launch the GUI or use real account data. They measure completed store operations, not native frame rates or input-to-display latency. See [the performance evidence](Tests/E2E/PERFORMANCE.md) for paired measurements and remaining UI checks.
 
 The build script also supports `--build-only`, `--debug`, `--logs`, and `--telemetry`. `TEAMSCHAT_SIGNING_IDENTITY` can select the identity used to pin the helper. The script verifies the helper before replacing the staged app and stops both OpenTeams and the older TeamsChat process before launch.
 
