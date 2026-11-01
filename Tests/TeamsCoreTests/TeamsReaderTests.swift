@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import TeamsCore
 
@@ -11,6 +12,7 @@ private actor ReadFixtureTransport: HTTPTransport {
     var requests: [URLRequest] = []
     var replies: [Reply]
     init(_ replies: [Reply]) { self.replies = replies }
+    func enqueue(_ reply: Reply) { replies.append(reply) }
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         requests.append(request)
         guard !replies.isEmpty else { throw URLError(.badServerResponse) }
@@ -125,6 +127,168 @@ struct TeamsReaderTests {
         history.merge([.init(id: "1", content: "Old content", version: "11", properties: .object(["deletetime": .number(123)]))])
         #expect(history.messages.count == 1)
         #expect(TeamsRenderedMessage(history.messages[0]).isDeleted)
+    }
+
+    @Test func unchangedRefreshDoesNotInvalidateRenderedMessages() async throws {
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let chat = TeamsWebChat(id: "chat", isOneOnOne: true)
+        let messages = [message(1), message(2)]
+        let transport = ReadFixtureTransport(try [
+            reply(TeamsWebChatPage(items: [chat])),
+            reply(TeamsWebMessagePage(messages: messages)),
+            reply(TeamsWebChatPage(items: [chat])),
+            reply(TeamsWebMessagePage(messages: messages))
+        ])
+        let store = TeamsReaderStore(cacheRoot: root, transport: transport)
+        await store.connect(session: session())
+        await store.loadConversation("chat")
+        await confirmation(expectedCount: 0) { changed in
+            withObservationTracking { _ = store.messages(in: "chat") } onChange: { changed() }
+            await store.refreshChats()
+            await store.refreshConversation("chat")
+        }
+        #expect(store.chatListError == nil && store.chatErrors["chat"] == nil)
+        #expect(await transport.requests.count == 4)
+    }
+
+    @Test func renderingRefreshesSameVersionEditsReactionsFilesAndDeletions() async throws {
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = message(2)
+        let files = #"[{"version":2,"id":"file-id","title":"Plan","baseUrl":"https://example.sharepoint.com/sites/team","objectUrl":"https://example.sharepoint.com/sites/team/plan.pdf"}]"#
+        let edited = TeamsWebMessage(id: original.id, content: "<p>Changed <b>content</b></p>",
+                                     messageType: "RichText/Html", imDisplayName: "Updated author",
+                                     originalArrivalTime: original.originalArrivalTime, version: original.version,
+                                     properties: .object(["edittime": .number(1), "files": .string(files),
+                                        "emotions": .array([.object(["key": .string("like"), "users": .array([.object(["mri": .string("8:orgid:other")])])])])]))
+        let deleted = TeamsWebMessage(id: original.id, content: edited.content, messageType: edited.messageType,
+                                      originalArrivalTime: original.originalArrivalTime, version: original.version,
+                                      properties: .object(["deletetime": .number(1)]))
+        let transport = ReadFixtureTransport(try [
+            reply(TeamsWebChatPage(items: [.init(id: "chat", isOneOnOne: true)])),
+            reply(TeamsWebMessagePage(messages: [message(1), original], messageToken: "older")),
+            reply(TeamsWebMessagePage(messages: [message(1), edited, message(3)])),
+            reply(TeamsWebMessagePage(messages: [message(0)])),
+            reply(TeamsWebMessagePage(messages: [deleted]))
+        ])
+        let store = TeamsReaderStore(cacheRoot: root, transport: transport)
+        await store.connect(session: session())
+        await store.loadConversation("chat")
+        let untouched = try #require(store.messages(in: "chat").first)
+        await store.refreshConversation("chat")
+        #expect(store.messages(in: "chat").map(\.id) == ["1", "2", "3"])
+        #expect(store.messages(in: "chat").first == untouched)
+        #expect(store.messages(in: "chat")[1] == TeamsRenderedMessage(edited, accountScope: store.accountScope,
+                                                                   accountRevision: store.accountRevision, chatID: "chat"))
+        let attachment = try #require(store.messages(in: "chat")[1].files.first?.sharePoint)
+        #expect(store.ownsSharePointAttachment(attachment))
+        await store.loadOlderMessages("chat")
+        #expect(store.messages(in: "chat").map(\.id) == ["0", "1", "2", "3"])
+        #expect(store.messages(in: "chat")[1] == untouched)
+        await store.refreshConversation("chat")
+        #expect(store.messages(in: "chat")[2].isDeleted)
+        #expect(store.messages(in: "chat")[2].files.isEmpty && store.messages(in: "chat")[2].reactions.isEmpty)
+        #expect(!store.ownsSharePointAttachment(attachment))
+        #expect(store.chatErrors["chat"] == nil)
+    }
+
+    @Test func chatRefreshUpdatesFallbackAuthorNames() async throws {
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sender = "8:orgid:other"
+        let original = TeamsWebChat(id: "chat", isOneOnOne: true, members: [.init(mri: sender, displayName: "Before")])
+        let renamed = TeamsWebChat(id: "chat", isOneOnOne: true, members: [.init(mri: sender, displayName: "After")])
+        let transport = ReadFixtureTransport(try [
+            reply(TeamsWebChatPage(items: [original])),
+            reply(TeamsWebMessagePage(messages: [
+                .init(id: "1", content: "Fallback", messageType: "Text", from: .string(sender)),
+                .init(id: "2", content: "Explicit", messageType: "Text", imDisplayName: "Message author", from: .string(sender))
+            ])),
+            reply(TeamsWebChatPage(items: [renamed]))
+        ])
+        let store = TeamsReaderStore(cacheRoot: root, transport: transport)
+        await store.connect(session: session())
+        await store.loadConversation("chat")
+        #expect(store.messages(in: "chat").map(\.author.name) == ["Before", "Message author"])
+        await store.refreshChats()
+        #expect(store.messages(in: "chat").map(\.author.name) == ["After", "Message author"])
+    }
+
+    @Test func unchangedPresentationStillReconcilesOutgoingDelivery() async throws {
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = TeamsWebMessage(id: "1", content: "Fixture draft", messageType: "Text", from: .string("8:orgid:" + account))
+        let transport = ReadFixtureTransport(try [
+            reply(TeamsWebChatPage(items: [.init(id: "chat", isOneOnOne: true)])),
+            reply(TeamsWebMessagePage(messages: [original])),
+            .init(data: Data(), status: 503)
+        ])
+        let store = TeamsReaderStore(cacheRoot: root, transport: transport)
+        let sendingSession = TeamsWebSession(baseURL: URL(string: "https://teams.cloud.microsoft/api/csa/amer")!, accessToken: "test-only",
+                                             expiresAt: .distantFuture, accountID: account, tenantID: tenant, displayName: "Example Person",
+                                             messaging: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/chatsvc/amer")!,
+                                                              accessToken: "fixture-only", expiresAt: .distantFuture))
+        await store.connect(session: sendingSession)
+        await store.loadConversation("chat")
+        store.composer.setDraft("Fixture draft", in: "chat")
+        #expect(store.composer.canSend(in: "chat"))
+        _ = await store.composer.sendDraft(in: "chat")
+        let pending = try #require(store.composer.outgoing["chat"])
+        #expect(pending.phase == .uncertain)
+        let confirmed = TeamsWebMessage(id: original.id, content: original.content, messageType: original.messageType,
+                                        from: original.from, clientMessageId: pending.clientMessageID)
+        await transport.enqueue(try reply(TeamsWebMessagePage(messages: [confirmed])))
+        await confirmation(expectedCount: 0) { changed in
+            withObservationTracking { _ = store.messages(in: "chat") } onChange: { changed() }
+            await store.refreshConversation("chat")
+        }
+        #expect(store.composer.outgoing["chat"] == nil)
+        #expect(store.composer.draft(in: "chat").isEmpty)
+        #expect(store.chatErrors["chat"] == nil)
+        #expect(await transport.requests.count == 4)
+    }
+
+    @Test func cachedRenderRebindsAttachmentsAcrossAccountsAndRevisions() async throws {
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let chat = TeamsWebChat(id: "shared-chat", isOneOnOne: true)
+        let files = #"[{"version":2,"id":"file","title":"Plan","baseUrl":"https://example.sharepoint.com/sites/team","objectUrl":"https://example.sharepoint.com/sites/team/plan.pdf"}]"#
+        let raw = TeamsWebMessage(id: "same-message", content: "Attachment", messageType: "Text", properties: .object(["files": .string(files)]))
+        for accountID in [account, "other-account"] {
+            let cache = TeamsReadCache(root: root, accountID: accountID, tenantID: tenant)
+            try await cache.save(.init(chats: [chat]))
+            try await cache.save(.init(messages: [raw]), in: chat.id)
+        }
+        let transport = ReadFixtureTransport([])
+        let store = TeamsReaderStore(cacheRoot: root, transport: transport)
+        var previous: TeamsSharePointAttachment?
+        for accountID in [account, "other-account", account, account] {
+            await store.restoreAccount(accountID: accountID, tenantID: tenant, displayName: "Fixture")
+            await store.loadConversation(chat.id)
+            let attachment = try #require(store.messages(in: chat.id).first?.files.first?.sharePoint)
+            #expect(attachment.accountScope == tenant + ":" + accountID)
+            #expect(attachment.accountRevision == store.accountRevision)
+            #expect(store.ownsSharePointAttachment(attachment))
+            if let previous {
+                #expect(previous.accountRevision != attachment.accountRevision)
+                #expect(!store.ownsSharePointAttachment(previous))
+            }
+            previous = attachment
+        }
+        #expect(await transport.requests.isEmpty)
+    }
+
+    @Test func cacheMergeKeepsDateFallbacksAndIDTieBreaking() throws {
+        let dated = TeamsWebMessage(id: "dated", originalArrivalTime: "2026-10-31T07:00:00.000Z")
+        let tie = TeamsWebMessage(id: "tie", originalArrivalTime: "invalid", composeTime: "2026-10-31T14:00:00+07:00")
+        let fallback = TeamsWebMessage(id: "1793430000000")
+        let missing = TeamsWebMessage(id: "missing", originalArrivalTime: "invalid")
+        var history = TeamsCachedHistory(messages: [tie, dated, missing, dated])
+        history.merge([fallback])
+        #expect(history.messages.map(\.id) == ["missing", "1793430000000", "dated", "tie"])
+        let restored = try JSONDecoder().decode(TeamsCachedHistory.self, from: JSONEncoder().encode(history))
+        #expect(restored.messages == history.messages)
     }
 
     @Test func placeholderLastMessageDoesNotDiscardAnOtherwiseValidChat() throws {

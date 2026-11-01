@@ -326,6 +326,27 @@ struct TeamsWebClientTests {
         } catch { #expect(error as? TeamsWebClientError == .invalidResponse) }
     }
 
+    @Test func arrivalDatesPreserveFallbacksAndCacheRepresentation() throws {
+        let cases: [(id: String, original: String?, compose: String?, expected: Date?)] = [
+            ("1", "2026-10-31T07:00:00.123Z", nil, Date(timeIntervalSince1970: 1_793_430_000.123)),
+            ("2", "invalid", "2026-10-31T14:00:00+07:00", Date(timeIntervalSince1970: 1_793_430_000)),
+            ("3", "1793430000", nil, Date(timeIntervalSince1970: 1_793_430_000)),
+            ("4", "1793430000123", nil, Date(timeIntervalSince1970: 1_793_430_000.123)),
+            ("1793430000123", nil, nil, Date(timeIntervalSince1970: 1_793_430_000.123)),
+            ("6", "invalid", "invalid", nil),
+            ("9007199254740993", nil, nil, nil)
+        ]
+        for value in cases {
+            let message = TeamsWebMessage(id: value.id, originalArrivalTime: value.original, composeTime: value.compose)
+            #expect(message.arrivalDate == value.expected)
+            let encoded = try JSONEncoder().encode(message)
+            let decoded = try JSONDecoder().decode(TeamsWebMessage.self, from: encoded)
+            #expect(decoded == message && decoded.arrivalDate == value.expected)
+            let fields = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            #expect(Set(fields.keys).isSubset(of: ["id", "originalArrivalTime", "composeTime"]))
+        }
+    }
+
     @Test func sessionDiagnosticsNeverExposeBearerValue() {
         let value = session(token: "sensitive-test-token")
         var output = ""
