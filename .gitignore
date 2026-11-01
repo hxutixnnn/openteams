@@ -1,0 +1,22 @@
+# Local build products and tooling
+.build/
+.swiftpm/
+dist/
+.codex/
+.DS_Store
+__pycache__/
+*.pyc
+
+# Private research and local configuration
+docs/
+reports/
+Config/
+.env
+.env.*
+*.local
+*.local.*
+*.p12
+*.pfx
+*.pem
+*.key
+*.mobileprovision
