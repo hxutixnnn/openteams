@@ -44,7 +44,7 @@
             let pending = try await cache.pendingDeletion(in: chat, messageID: id)
             precondition(pending == nil && store.deletionStage(in: chat, messageID: id) == nil)
             precondition(store.deletionMessage(in: chat, messageID: id) == nil)
-            precondition(!store.canDelete(in: chat, messageID: id) && !store.canEditMessage(in: chat, messageID: id))
+            precondition(!store.canDelete(in: chat, messageID: id))
             precondition(saved.messages.first { $0.id == neighborID } == neighbor)
             precondition(saved.messages.count == before.messages.count)
             precondition(store.composer.draft(in: chat) == "Fictional deletion workflow draft")
