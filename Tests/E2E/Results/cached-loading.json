@@ -1,0 +1,1364 @@
+{
+  "baseline_commit": "0a7a6fb9284526f12f4ec92a23593eb282889896",
+  "configuration": "Swift 6.4.2, macOS 27.2 SDK, arm64, debug -Onone; uncontrolled host load; five alternating process pairs; all operations awaited to completion; initial exploratory sample excluded",
+  "baseline_instrumentation": "cached-loading-baseline.patch; debug measurement hooks only",
+  "inputs": {
+    "baseline-workload": "a9c19c94db9f3562111ee69182c9850cff42045a512bea57029472ae0714432d",
+    "candidate-workload": "80c0b95537a8da2c3880c0fbaf1d3c73c856d7dd0b60e130cfb6fdf170b5ae90",
+    "CachedConversationLoading.swift": "d48d9f580e55ed96dd2beb1723eb5d4387724743e3957ab9b51799eec584f10a",
+    "baseline-instrumentation.swift": "78e84994489f2c3230195ec89225cc0abec9d5aee699e6c4d30e95f630e5cfb2",
+    "TeamsReaderStore.swift": "11f515e0b604a0d96584541a47edb067d8a0674cea31e03b203b388f28fe8669"
+  },
+  "exit_codes": {
+    "1-baseline": 0,
+    "1-candidate": 0,
+    "2-candidate": 0,
+    "2-baseline": 0,
+    "3-baseline": 0,
+    "3-candidate": 0,
+    "4-candidate": 0,
+    "4-baseline": 0,
+    "5-baseline": 0,
+    "5-candidate": 0
+  },
+  "records": [
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.361917,
+        "conversion": 0.351916,
+        "publication": 0.19225
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 3.038125,
+      "warm_ms": 0.008542,
+      "pair": 1,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.345875,
+        "conversion": 3.028209,
+        "publication": 1.19325
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 21.6015,
+      "warm_ms": 0.011916,
+      "pair": 1,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.321583,
+        "conversion": 81.598208,
+        "publication": 0.137416
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 84.09075,
+      "warm_ms": 0.009959,
+      "pair": 1,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 19.8015,
+        "conversion": 758.796333,
+        "publication": 1.284084
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 779.927667,
+      "warm_ms": 0.014125,
+      "pair": 1,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.165959,
+        "conversion": 0.405208,
+        "publication": 0.112375
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 2.807583,
+      "warm_ms": 0.009209,
+      "pair": 1,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.159667,
+        "conversion": 3.408958,
+        "publication": 0.01725
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 20.661875,
+      "warm_ms": 0.024167,
+      "pair": 1,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.269208,
+        "conversion": 82.360209,
+        "publication": 0.018167
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 84.7155,
+      "warm_ms": 0.009834,
+      "pair": 1,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 20.040792,
+        "conversion": 748.259583,
+        "publication": 0.021
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 768.400458,
+      "warm_ms": 0.013292,
+      "pair": 1,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.509708,
+        "conversion": 0.420792,
+        "publication": 0.207583
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 3.268458,
+      "warm_ms": 0.009166,
+      "pair": 2,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.105333,
+        "conversion": 3.240041,
+        "publication": 1.248708
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 21.628333,
+      "warm_ms": 0.020209,
+      "pair": 2,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.223917,
+        "conversion": 83.203625,
+        "publication": 0.182792
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 85.6455,
+      "warm_ms": 0.010583,
+      "pair": 2,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 20.148833,
+        "conversion": 773.122,
+        "publication": 1.226292
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 794.5385,
+      "warm_ms": 0.013417,
+      "pair": 2,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.416917,
+        "conversion": 0.405666,
+        "publication": 0.063083
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 2.9985,
+      "warm_ms": 0.00725,
+      "pair": 2,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.34175,
+        "conversion": 3.092333,
+        "publication": 0.011208
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 20.490417,
+      "warm_ms": 0.01875,
+      "pair": 2,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.335583,
+        "conversion": 80.785708,
+        "publication": 0.01825
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 83.213333,
+      "warm_ms": 0.011625,
+      "pair": 2,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 20.560916,
+        "conversion": 761.38875,
+        "publication": 0.019083
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 782.060042,
+      "warm_ms": 0.019167,
+      "pair": 2,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.679334,
+        "conversion": 0.3565,
+        "publication": 0.185333
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 3.337417,
+      "warm_ms": 0.005583,
+      "pair": 3,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.543708,
+        "conversion": 3.4755,
+        "publication": 1.217459
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 22.281834,
+      "warm_ms": 0.012041,
+      "pair": 3,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.260666,
+        "conversion": 81.658541,
+        "publication": 0.141041
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 84.093458,
+      "warm_ms": 0.009833,
+      "pair": 3,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 20.551834,
+        "conversion": 752.2765,
+        "publication": 1.296292
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 774.187667,
+      "warm_ms": 0.014083,
+      "pair": 3,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.280625,
+        "conversion": 0.454375,
+        "publication": 0.074541
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 2.905125,
+      "warm_ms": 0.008708,
+      "pair": 3,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.341834,
+        "conversion": 3.180125,
+        "publication": 0.010542
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 20.583041,
+      "warm_ms": 0.020292,
+      "pair": 3,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.199084,
+        "conversion": 81.758167,
+        "publication": 0.021041
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 84.049792,
+      "warm_ms": 0.011708,
+      "pair": 3,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 20.219417,
+        "conversion": 761.596875,
+        "publication": 0.015084
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 781.913459,
+      "warm_ms": 0.019083,
+      "pair": 3,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.27025,
+        "conversion": 0.3635,
+        "publication": 0.187
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 2.921542,
+      "warm_ms": 0.004541,
+      "pair": 4,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.031667,
+        "conversion": 3.086292,
+        "publication": 1.201125
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 21.35075,
+      "warm_ms": 0.010708,
+      "pair": 4,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.142625,
+        "conversion": 80.226625,
+        "publication": 0.139209
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 82.536583,
+      "warm_ms": 0.010041,
+      "pair": 4,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 19.878875,
+        "conversion": 761.816625,
+        "publication": 1.229583
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 782.9725,
+      "warm_ms": 0.019917,
+      "pair": 4,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.114042,
+        "conversion": 0.374209,
+        "publication": 0.055625
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 2.633792,
+      "warm_ms": 0.006167,
+      "pair": 4,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.53325,
+        "conversion": 3.20125,
+        "publication": 0.016041
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 20.810291,
+      "warm_ms": 0.013417,
+      "pair": 4,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.413875,
+        "conversion": 81.023292,
+        "publication": 0.014292
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 83.619708,
+      "warm_ms": 0.01175,
+      "pair": 4,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 20.410959,
+        "conversion": 747.8025,
+        "publication": 0.018042
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 768.35675,
+      "warm_ms": 0.020459,
+      "pair": 4,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.201166,
+        "conversion": 0.354709,
+        "publication": 0.183875
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 2.834708,
+      "warm_ms": 0.021791,
+      "pair": 5,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.428167,
+        "conversion": 3.301834,
+        "publication": 1.301292
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 22.081,
+      "warm_ms": 0.016792,
+      "pair": 5,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.329917,
+        "conversion": 82.697916,
+        "publication": 0.139541
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 85.207333,
+      "warm_ms": 0.008583,
+      "pair": 5,
+      "variant": "baseline"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 20.357917,
+        "conversion": 764.466708,
+        "publication": 1.228791
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": true,
+        "publication": true
+      },
+      "total_ms": 786.094292,
+      "warm_ms": 0.012833,
+      "pair": 5,
+      "variant": "baseline"
+    },
+    {
+      "count": 200,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 2.193958,
+        "conversion": 0.382458,
+        "publication": 0.060875
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 2.715334,
+      "warm_ms": 0.007042,
+      "pair": 5,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": false,
+      "stages_ms": {
+        "cache_read": 17.082584,
+        "conversion": 3.418375,
+        "publication": 0.011125
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 20.564292,
+      "warm_ms": 0.013,
+      "pair": 5,
+      "variant": "candidate"
+    },
+    {
+      "count": 200,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 2.312958,
+        "conversion": 81.428959,
+        "publication": 0.018375
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 83.836708,
+      "warm_ms": 0.008833,
+      "pair": 5,
+      "variant": "candidate"
+    },
+    {
+      "count": 2000,
+      "rich": true,
+      "stages_ms": {
+        "cache_read": 19.985792,
+        "conversion": 745.030667,
+        "publication": 0.022042
+      },
+      "stages_on_main_thread": {
+        "cache_read": false,
+        "conversion": false,
+        "publication": true
+      },
+      "total_ms": 765.146708,
+      "warm_ms": 0.02025,
+      "pair": 5,
+      "variant": "candidate"
+    }
+  ],
+  "summary": [
+    {
+      "rich": false,
+      "count": 200,
+      "variant": "baseline",
+      "total_ms": {
+        "median": 3.038125,
+        "min": 2.834708,
+        "max": 3.337417,
+        "samples": [
+          3.038125,
+          3.268458,
+          3.337417,
+          2.921542,
+          2.834708
+        ]
+      },
+      "warm_ms": {
+        "median": 0.008542,
+        "min": 0.004541,
+        "max": 0.021791,
+        "samples": [
+          0.008542,
+          0.009166,
+          0.005583,
+          0.004541,
+          0.021791
+        ]
+      },
+      "cache_read": {
+        "median": 2.361917,
+        "min": 2.201166,
+        "max": 2.679334,
+        "samples": [
+          2.361917,
+          2.509708,
+          2.679334,
+          2.27025,
+          2.201166
+        ]
+      },
+      "conversion": {
+        "median": 0.3565,
+        "min": 0.351916,
+        "max": 0.420792,
+        "samples": [
+          0.351916,
+          0.420792,
+          0.3565,
+          0.3635,
+          0.354709
+        ]
+      },
+      "publication": {
+        "median": 0.187,
+        "min": 0.183875,
+        "max": 0.207583,
+        "samples": [
+          0.19225,
+          0.207583,
+          0.185333,
+          0.187,
+          0.183875
+        ]
+      },
+      "measured_main_spans_ms": {
+        "median": 0.544166,
+        "min": 0.538584,
+        "max": 0.628375,
+        "samples": [
+          0.544166,
+          0.628375,
+          0.541833,
+          0.5505,
+          0.538584
+        ]
+      }
+    },
+    {
+      "rich": false,
+      "count": 200,
+      "variant": "candidate",
+      "total_ms": {
+        "median": 2.807583,
+        "min": 2.633792,
+        "max": 2.9985,
+        "samples": [
+          2.807583,
+          2.9985,
+          2.905125,
+          2.633792,
+          2.715334
+        ]
+      },
+      "warm_ms": {
+        "median": 0.00725,
+        "min": 0.006167,
+        "max": 0.009209,
+        "samples": [
+          0.009209,
+          0.00725,
+          0.008708,
+          0.006167,
+          0.007042
+        ]
+      },
+      "cache_read": {
+        "median": 2.193958,
+        "min": 2.114042,
+        "max": 2.416917,
+        "samples": [
+          2.165959,
+          2.416917,
+          2.280625,
+          2.114042,
+          2.193958
+        ]
+      },
+      "conversion": {
+        "median": 0.405208,
+        "min": 0.374209,
+        "max": 0.454375,
+        "samples": [
+          0.405208,
+          0.405666,
+          0.454375,
+          0.374209,
+          0.382458
+        ]
+      },
+      "publication": {
+        "median": 0.063083,
+        "min": 0.055625,
+        "max": 0.112375,
+        "samples": [
+          0.112375,
+          0.063083,
+          0.074541,
+          0.055625,
+          0.060875
+        ]
+      },
+      "measured_main_spans_ms": {
+        "median": 0.063083,
+        "min": 0.055625,
+        "max": 0.112375,
+        "samples": [
+          0.112375,
+          0.063083,
+          0.074541,
+          0.055625,
+          0.060875
+        ]
+      }
+    },
+    {
+      "rich": false,
+      "count": 2000,
+      "variant": "baseline",
+      "total_ms": {
+        "median": 21.628333,
+        "min": 21.35075,
+        "max": 22.281834,
+        "samples": [
+          21.6015,
+          21.628333,
+          22.281834,
+          21.35075,
+          22.081
+        ]
+      },
+      "warm_ms": {
+        "median": 0.012041,
+        "min": 0.010708,
+        "max": 0.020209,
+        "samples": [
+          0.011916,
+          0.020209,
+          0.012041,
+          0.010708,
+          0.016792
+        ]
+      },
+      "cache_read": {
+        "median": 17.345875,
+        "min": 17.031667,
+        "max": 17.543708,
+        "samples": [
+          17.345875,
+          17.105333,
+          17.543708,
+          17.031667,
+          17.428167
+        ]
+      },
+      "conversion": {
+        "median": 3.240041,
+        "min": 3.028209,
+        "max": 3.4755,
+        "samples": [
+          3.028209,
+          3.240041,
+          3.4755,
+          3.086292,
+          3.301834
+        ]
+      },
+      "publication": {
+        "median": 1.217459,
+        "min": 1.19325,
+        "max": 1.301292,
+        "samples": [
+          1.19325,
+          1.248708,
+          1.217459,
+          1.201125,
+          1.301292
+        ]
+      },
+      "measured_main_spans_ms": {
+        "median": 4.488749,
+        "min": 4.221458999999999,
+        "max": 4.692959,
+        "samples": [
+          4.221458999999999,
+          4.488749,
+          4.692959,
+          4.287417,
+          4.603126
+        ]
+      }
+    },
+    {
+      "rich": false,
+      "count": 2000,
+      "variant": "candidate",
+      "total_ms": {
+        "median": 20.583041,
+        "min": 20.490417,
+        "max": 20.810291,
+        "samples": [
+          20.661875,
+          20.490417,
+          20.583041,
+          20.810291,
+          20.564292
+        ]
+      },
+      "warm_ms": {
+        "median": 0.01875,
+        "min": 0.013,
+        "max": 0.024167,
+        "samples": [
+          0.024167,
+          0.01875,
+          0.020292,
+          0.013417,
+          0.013
+        ]
+      },
+      "cache_read": {
+        "median": 17.34175,
+        "min": 17.082584,
+        "max": 17.53325,
+        "samples": [
+          17.159667,
+          17.34175,
+          17.341834,
+          17.53325,
+          17.082584
+        ]
+      },
+      "conversion": {
+        "median": 3.20125,
+        "min": 3.092333,
+        "max": 3.418375,
+        "samples": [
+          3.408958,
+          3.092333,
+          3.180125,
+          3.20125,
+          3.418375
+        ]
+      },
+      "publication": {
+        "median": 0.011208,
+        "min": 0.010542,
+        "max": 0.01725,
+        "samples": [
+          0.01725,
+          0.011208,
+          0.010542,
+          0.016041,
+          0.011125
+        ]
+      },
+      "measured_main_spans_ms": {
+        "median": 0.011208,
+        "min": 0.010542,
+        "max": 0.01725,
+        "samples": [
+          0.01725,
+          0.011208,
+          0.010542,
+          0.016041,
+          0.011125
+        ]
+      }
+    },
+    {
+      "rich": true,
+      "count": 200,
+      "variant": "baseline",
+      "total_ms": {
+        "median": 84.093458,
+        "min": 82.536583,
+        "max": 85.6455,
+        "samples": [
+          84.09075,
+          85.6455,
+          84.093458,
+          82.536583,
+          85.207333
+        ]
+      },
+      "warm_ms": {
+        "median": 0.009959,
+        "min": 0.008583,
+        "max": 0.010583,
+        "samples": [
+          0.009959,
+          0.010583,
+          0.009833,
+          0.010041,
+          0.008583
+        ]
+      },
+      "cache_read": {
+        "median": 2.260666,
+        "min": 2.142625,
+        "max": 2.329917,
+        "samples": [
+          2.321583,
+          2.223917,
+          2.260666,
+          2.142625,
+          2.329917
+        ]
+      },
+      "conversion": {
+        "median": 81.658541,
+        "min": 80.226625,
+        "max": 83.203625,
+        "samples": [
+          81.598208,
+          83.203625,
+          81.658541,
+          80.226625,
+          82.697916
+        ]
+      },
+      "publication": {
+        "median": 0.139541,
+        "min": 0.137416,
+        "max": 0.182792,
+        "samples": [
+          0.137416,
+          0.182792,
+          0.141041,
+          0.139209,
+          0.139541
+        ]
+      },
+      "measured_main_spans_ms": {
+        "median": 81.799582,
+        "min": 80.36583399999999,
+        "max": 83.38641700000001,
+        "samples": [
+          81.735624,
+          83.38641700000001,
+          81.799582,
+          80.36583399999999,
+          82.837457
+        ]
+      }
+    },
+    {
+      "rich": true,
+      "count": 200,
+      "variant": "candidate",
+      "total_ms": {
+        "median": 83.836708,
+        "min": 83.213333,
+        "max": 84.7155,
+        "samples": [
+          84.7155,
+          83.213333,
+          84.049792,
+          83.619708,
+          83.836708
+        ]
+      },
+      "warm_ms": {
+        "median": 0.011625,
+        "min": 0.008833,
+        "max": 0.01175,
+        "samples": [
+          0.009834,
+          0.011625,
+          0.011708,
+          0.01175,
+          0.008833
+        ]
+      },
+      "cache_read": {
+        "median": 2.312958,
+        "min": 2.199084,
+        "max": 2.413875,
+        "samples": [
+          2.269208,
+          2.335583,
+          2.199084,
+          2.413875,
+          2.312958
+        ]
+      },
+      "conversion": {
+        "median": 81.428959,
+        "min": 80.785708,
+        "max": 82.360209,
+        "samples": [
+          82.360209,
+          80.785708,
+          81.758167,
+          81.023292,
+          81.428959
+        ]
+      },
+      "publication": {
+        "median": 0.01825,
+        "min": 0.014292,
+        "max": 0.021041,
+        "samples": [
+          0.018167,
+          0.01825,
+          0.021041,
+          0.014292,
+          0.018375
+        ]
+      },
+      "measured_main_spans_ms": {
+        "median": 0.01825,
+        "min": 0.014292,
+        "max": 0.021041,
+        "samples": [
+          0.018167,
+          0.01825,
+          0.021041,
+          0.014292,
+          0.018375
+        ]
+      }
+    },
+    {
+      "rich": true,
+      "count": 2000,
+      "variant": "baseline",
+      "total_ms": {
+        "median": 782.9725,
+        "min": 774.187667,
+        "max": 794.5385,
+        "samples": [
+          779.927667,
+          794.5385,
+          774.187667,
+          782.9725,
+          786.094292
+        ]
+      },
+      "warm_ms": {
+        "median": 0.014083,
+        "min": 0.012833,
+        "max": 0.019917,
+        "samples": [
+          0.014125,
+          0.013417,
+          0.014083,
+          0.019917,
+          0.012833
+        ]
+      },
+      "cache_read": {
+        "median": 20.148833,
+        "min": 19.8015,
+        "max": 20.551834,
+        "samples": [
+          19.8015,
+          20.148833,
+          20.551834,
+          19.878875,
+          20.357917
+        ]
+      },
+      "conversion": {
+        "median": 761.816625,
+        "min": 752.2765,
+        "max": 773.122,
+        "samples": [
+          758.796333,
+          773.122,
+          752.2765,
+          761.816625,
+          764.466708
+        ]
+      },
+      "publication": {
+        "median": 1.229583,
+        "min": 1.226292,
+        "max": 1.296292,
+        "samples": [
+          1.284084,
+          1.226292,
+          1.296292,
+          1.229583,
+          1.228791
+        ]
+      },
+      "measured_main_spans_ms": {
+        "median": 763.0462080000001,
+        "min": 753.572792,
+        "max": 774.3482919999999,
+        "samples": [
+          760.080417,
+          774.3482919999999,
+          753.572792,
+          763.0462080000001,
+          765.695499
+        ]
+      }
+    },
+    {
+      "rich": true,
+      "count": 2000,
+      "variant": "candidate",
+      "total_ms": {
+        "median": 768.400458,
+        "min": 765.146708,
+        "max": 782.060042,
+        "samples": [
+          768.400458,
+          782.060042,
+          781.913459,
+          768.35675,
+          765.146708
+        ]
+      },
+      "warm_ms": {
+        "median": 0.019167,
+        "min": 0.013292,
+        "max": 0.020459,
+        "samples": [
+          0.013292,
+          0.019167,
+          0.019083,
+          0.020459,
+          0.02025
+        ]
+      },
+      "cache_read": {
+        "median": 20.219417,
+        "min": 19.985792,
+        "max": 20.560916,
+        "samples": [
+          20.040792,
+          20.560916,
+          20.219417,
+          20.410959,
+          19.985792
+        ]
+      },
+      "conversion": {
+        "median": 748.259583,
+        "min": 745.030667,
+        "max": 761.596875,
+        "samples": [
+          748.259583,
+          761.38875,
+          761.596875,
+          747.8025,
+          745.030667
+        ]
+      },
+      "publication": {
+        "median": 0.019083,
+        "min": 0.015084,
+        "max": 0.022042,
+        "samples": [
+          0.021,
+          0.019083,
+          0.015084,
+          0.018042,
+          0.022042
+        ]
+      },
+      "measured_main_spans_ms": {
+        "median": 0.019083,
+        "min": 0.015084,
+        "max": 0.022042,
+        "samples": [
+          0.021,
+          0.019083,
+          0.015084,
+          0.018042,
+          0.022042
+        ]
+      }
+    }
+  ]
+}

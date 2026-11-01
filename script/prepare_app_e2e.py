@@ -1,3 +1,4 @@
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -7,6 +8,10 @@ import subprocess
 import tempfile
 import uuid
 
+
+parser = argparse.ArgumentParser(description="Prepare an isolated native fixture without launching it.")
+parser.add_argument("--cached-history-count", type=int, choices=[0, 200, 2000], default=0)
+arguments = parser.parse_args()
 
 repository = Path(__file__).resolve().parent.parent
 subprocess.run(["swift", "build", "--jobs", "4", "--product", "OpenTeams"], cwd=repository, check=True, timeout=600)
@@ -30,6 +35,7 @@ with (contents / "Info.plist").open("wb") as stream:
         "NSHighResolutionCapable": True,
         "LSUIElement": True,
         "OpenTeamsPerformanceFixtureRoot": str(root),
+        "OpenTeamsCachedHistoryCount": arguments.cached_history_count,
     }, stream)
 manifest = {
     "bundle": str(bundle), "root": str(root), "bundle_id": identity,

@@ -20,6 +20,14 @@ import TeamsCore
 
 private actor PerformanceFixtureTransport: HTTPTransport {
     private var newest = 100
+    func cachedMessages(count: Int, account: String) -> [TeamsWebMessage] {
+        (1...count).map { index in
+            TeamsWebMessage(id: String(1_800_000_000_000 + index),
+                content: "<p><strong>Fictional cached message \(index) · \(account)</strong> Xin chào 👋 <a href=\"https://example.com/fixture\">Reference</a></p><ol><li>First item</li><li><em>Second item</em></li></ol>",
+                messageType: "RichText/Html", imDisplayName: "Alex Example", from: .string("8:orgid:" + account),
+                originalArrivalTime: String(1_800_000_000_000 + index), version: "1")
+        }
+    }
     private struct MessageTarget: Hashable {
         let account: String
         let chat: String
@@ -137,10 +145,12 @@ private actor PerformanceFixtureTransport: HTTPTransport {
     let store: TeamsReaderStore
     let coordinator: TeamsRefreshCoordinator
     private let transport = PerformanceFixtureTransport()
+    private let cacheRoot: URL
     private(set) var busy = false
     private(set) var ready = false
 
     init(root: URL) {
+        cacheRoot = root.appendingPathComponent("ReadCache")
         store = TeamsReaderStore(cacheRoot: root.appendingPathComponent("ReadCache"), transport: transport,
                                  mediaFactory: { _ in throw TeamsMediaError.unavailable })
         coordinator = TeamsRefreshCoordinator(reader: store, defaults: TeamsPerformanceFixtureConfiguration.defaults)
@@ -149,6 +159,15 @@ private actor PerformanceFixtureTransport: HTTPTransport {
     func connect(_ account: String) async {
         busy = true
         defer { busy = false }
+        if let count = Bundle.main.object(forInfoDictionaryKey: "OpenTeamsCachedHistoryCount") as? Int, [200, 2000].contains(count) {
+            let cache = TeamsReadCache(root: cacheRoot, accountID: account, tenantID: "fixture-tenant")
+            for chatID in ["fixture-one", "fixture-two"] {
+                if let history = try? await cache.history(in: chatID), history.messages.isEmpty {
+                    let messages = await transport.cachedMessages(count: count, account: account)
+                    try? await cache.save(.init(messages: messages, messageToken: "older"), in: chatID)
+                }
+            }
+        }
         await store.connect(session: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/csa/fixture")!,
             accessToken: "fictional-only-" + account, expiresAt: .distantFuture, accountID: account, tenantID: "fixture-tenant",
             displayName: account, messaging: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/chatsvc/fixture")!,

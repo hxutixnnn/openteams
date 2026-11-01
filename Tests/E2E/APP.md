@@ -51,3 +51,5 @@ Run `python3 script/test_fixture_deletion_e2e.py`. This bounded process extracts
 Record the commit and source hashes, bundle binary hash, temporary root, process/window IDs, actual editor text and persisted rich JSON, and per-step passed/failed/blocked status. Restart means terminating and relaunching this same fixture process, not constructing another store in a test executable. The supplied fixture rejects unsupported requests, including sending and reactions other than the context-original Like scenario above. Existing intercepted core workflows separately cover send uncertainty and recovery.
 
 Manual app E2E outcomes are distinct from performance benchmarks. Native FPS/hitch tracing, startup timings, rapid typing/IME, selection, accessibility and live-service behavior require their own evidence. If a step cannot be completed with the approved background route, report the exact step as blocked and withhold any claim that the full journey passed. Independent QA must approve the final PR commit before merge.
+
+Cached-history loading has an additional isolated preparation mode and native acceptance journey in [CACHED-LOADING.md](CACHED-LOADING.md).
