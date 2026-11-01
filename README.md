@@ -2,9 +2,11 @@
 
 OpenTeams is an unofficial native macOS client for Microsoft Teams chats. It uses Teams web services and is not affiliated with Microsoft. Those private services can change without notice, and functionality may stop working.
 
-![OpenTeams Sample Workspace with fictional conversations](assets/screenshots/mock-workspace.png)
+![OpenTeams Sample Workspace in light mode with fictional conversations](assets/screenshots/mock-workspace.png)
 
-*Mock-data preview of the Sample Workspace in a full-width macOS window.*
+![OpenTeams Sample Workspace in dark mode with fictional conversations](assets/screenshots/mock-workspace-dark.png)
+
+*Light and dark mock-data previews of the Sample Workspace in full-width macOS windows.*
 
 ## Requirements and setup
 

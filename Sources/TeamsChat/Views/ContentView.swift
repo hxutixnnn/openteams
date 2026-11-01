@@ -3,6 +3,7 @@ import TeamsCore
 
 struct ContentView: View {
     var store: FixtureChatStore
+    var showcaseDetails = false
     @SceneStorage("selectedConversation") private var selectedID = ""
     @AppStorage("lastConversationID") private var lastConversationID = "design"
     @SceneStorage("showInspector") private var showInspector = false
@@ -52,6 +53,7 @@ struct ContentView: View {
             compose: { focusComposer = UUID() }
         ))
         .onAppear {
+            if showcaseDetails { showInspector = true }
             if store.conversation(selectedID) == nil {
                 selectedID = store.conversation(lastConversationID)?.id ?? "design"
             }

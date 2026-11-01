@@ -37,8 +37,9 @@ struct TeamsChatApp: App {
         WindowGroup("OpenTeams", id: "chat") {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--showcase"), let showcaseDefaults {
-                ContentView(store: store)
+                ContentView(store: store, showcaseDetails: ProcessInfo.processInfo.arguments.contains("--showcase-dark"))
                     .defaultAppStorage(showcaseDefaults)
+                    .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--showcase-dark") ? .dark : nil)
                     .tint(ChatTheme.accent)
                     .frame(minWidth: 820, minHeight: 580)
             } else if ProcessInfo.processInfo.arguments.contains("--context-preview-fixture") || ProcessInfo.processInfo.arguments.contains("--context-preview-pdf-fixture") || ProcessInfo.processInfo.arguments.contains("--context-preview-held-fixture") {
