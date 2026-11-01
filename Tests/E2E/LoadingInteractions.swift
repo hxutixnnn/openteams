@@ -30,8 +30,9 @@ private actor FixtureTransport: HTTPTransport {
     }
     static func report(_ workload: String, count: Int, times: [Double]) throws {
         let sorted = times.sorted()
+        let median = (sorted[(sorted.count - 1) / 2] + sorted[sorted.count / 2]) / 2
         let row: [String: Any] = ["workload": workload, "messages": count, "samples_ms": times,
-            "median_ms": sorted[sorted.count / 2], "min_ms": sorted.first!, "max_ms": sorted.last!]
+            "median_ms": median, "min_ms": sorted.first!, "max_ms": sorted.last!]
         print(String(decoding: try JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
     }
     static func message(_ index: Int, rich: Bool, marker: TeamsWebJSONValue? = nil, key: String = "deletetime") -> TeamsWebMessage {

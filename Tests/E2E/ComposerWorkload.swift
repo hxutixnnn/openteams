@@ -72,8 +72,9 @@ private struct Snapshot: Codable, Equatable {
                         }
                     }
                     let sorted = times.sorted()
+                    let median = (sorted[(sorted.count - 1) / 2] + sorted[sorted.count / 2]) / 2
                     let row: [String: Any] = ["kind": rich ? "rich" : "plain", "drafts": count, "mode": mode,
-                        "samples_ms": times, "median_ms": sorted[sorted.count / 2], "min_ms": sorted.first!, "max_ms": sorted.last!,
+                        "samples_ms": times, "median_ms": median, "min_ms": sorted.first!, "max_ms": sorted.last!,
                         "write_count": writes, "bytes_written": bytes, "saved_bytes": try Data(contentsOf: file).count,
                         "plain_utf8_per_draft": documents[0].plainText.utf8.count, "saved_state_and_permissions_ok": true]
                     let json = try JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])

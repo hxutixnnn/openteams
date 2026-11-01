@@ -10,10 +10,12 @@ Five alternating process pairs, each with two discarded warmups and ten samples 
 
 | Workload | Baseline ms | Candidate ms |
 | --- | ---: | ---: |
-| 200 plain messages, 30 rows | 4.662 [4.479–4.833] | 0.113 [0.108–0.121] |
-| 2000 plain messages, 30 rows | 47.886 [47.172–48.707] | 0.109 [0.108–0.114] |
-| 200 rich messages, 30 rows | 16.119 [15.722–18.270] | 0.108 [0.108–0.116] |
-| 2000 rich messages, 30 rows | 62.287 [61.294–65.974] | 0.110 [0.109–0.110] |
+| 200 plain messages, 30 rows | 4.616 [4.477–4.767] | 0.113 [0.108–0.118] |
+| 2000 plain messages, 30 rows | 47.867 [47.094–48.547] | 0.109 [0.108–0.114] |
+| 200 rich messages, 30 rows | 16.036 [15.627–18.056] | 0.108 [0.108–0.115] |
+| 2000 rich messages, 30 rows | 62.218 [61.260–65.704] | 0.109 [0.109–0.110] |
+
+Process medians use the average of the two middle samples for even sample counts. These results were recalculated from the original raw samples after QA identified that the original reporters selected the upper middle sample. Raw logs remain unchanged; `interaction-results.json` and the per-process values in `composer-results.json` contain the corrected statistics. Pooled draft medians below are unchanged.
 
 Cold store loading shows no clear improvement. For 2,000 plain messages it was 20.620 [20.085–22.234] → 22.091 [21.026–24.236] ms; for 2,000 rich messages, 783.315 [778.153–864.172] → 785.090 [760.679–820.845] ms. Cached-list restore and warm conversation calls also show no clear improvement. Fixtures have one chat and a warm filesystem cache: these are cold store loads, not cold disk or app startup. The index adds one ID-to-offset entry per loaded message. Rich-history parsing remains synchronous.
 
