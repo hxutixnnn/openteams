@@ -20,17 +20,30 @@ import TeamsCore
 
 private actor PerformanceFixtureTransport: HTTPTransport {
     private var newest = 100
-    private var deleted: Set<String> = []
-    private var edits: [String: TeamsWebMessage] = [:]
+    private struct MessageTarget: Hashable {
+        let account: String
+        let chat: String
+        let id: String
+    }
+    private var deleted: Set<MessageTarget> = []
+    private var edits: [MessageTarget: TeamsWebMessage] = [:]
     private var likedAccounts: Set<String> = []
 
     func append() { newest += 1 }
 
-    private func message(_ index: Int, account: String) -> TeamsWebMessage {
+    private func message(_ index: Int, account: String, chat: String = "fixture-one") -> TeamsWebMessage {
         let id = String(1_800_000_000_000 + index)
-        if let edited = edits[id] { return edited }
+        let target = MessageTarget(account: account, chat: chat, id: id)
+        let edited = edits[target]
+        if deleted.contains(target) {
+            return TeamsWebMessage(id: id, content: edited?.content ?? "Fictional message \(index)",
+                messageType: edited?.messageType ?? "Text", imDisplayName: "Alex Example",
+                from: .string("8:orgid:fixture-a"), originalArrivalTime: id,
+                composeTime: "2026-11-01T00:00:00Z", version: edited == nil ? "2" : "3",
+                properties: .object(["deletetime": .number(1)]))
+        }
+        if let edited { return edited }
         var properties: [String: TeamsWebJSONValue] = [:]
-        if deleted.contains(id) { properties["deletetime"] = .number(1) }
         if index == 50, likedAccounts.contains(account) {
             properties["emotions"] = .array([.object([
                 "key": .string("like"), "users": .array([.object(["mri": .string("8:orgid:" + account)])])
@@ -89,22 +102,27 @@ private actor PerformanceFixtureTransport: HTTPTransport {
             if method == "PUT" { likedAccounts.insert(account) }
             else { likedAccounts.remove(account) }
             data = Data("{}".utf8)
-        } else if method == "GET", url.path.hasSuffix("/messages") {
+        } else if method == "GET", url.path.hasSuffix("/messages"),
+                  let chat = components.dropLast().last, ["fixture-one", "fixture-two"].contains(chat) {
             let older = request.value(forHTTPHeaderField: "x-ms-messageToken") == "older"
-            let messages = (older ? 61...80 : 81...newest).map { message($0, account: account) }
+            let messages = (older ? 61...80 : 81...newest).map { message($0, account: account, chat: chat) }
             data = try JSONEncoder().encode(TeamsWebMessagePage(messages: messages, messageToken: older ? nil : "older"))
         } else if let position = components.firstIndex(of: "messages"), components.count == position + 2,
-                  let index = Int(components[position + 1]), (61...200).contains(index - 1_800_000_000_000) {
+                  let chat = components.prefix(position).last, ["fixture-one", "fixture-two"].contains(chat),
+                  let index = Int(components[position + 1]), (61...200).contains(index - 1_800_000_000_000),
+                  (method == "GET" && url.path == "/api/csa/fixture/api/v1/chats/\(chat)/messages/\(index)") ||
+                  (["PUT", "DELETE"].contains(method) && url.path == "/api/chatsvc/fixture/v1/users/ME/conversations/\(chat)/messages/\(index)") {
             let id = components[position + 1]
-            if method == "DELETE" { deleted.insert(id) }
+            let target = MessageTarget(account: account, chat: chat, id: id)
+            if method == "DELETE" { deleted.insert(target) }
             if method == "PUT" {
                 let body = try JSONDecoder().decode([String: TeamsWebJSONValue].self, from: request.httpBody ?? Data())
-                edits[id] = TeamsWebMessage(id: id, content: body["content"]?.stringValue,
+                edits[target] = TeamsWebMessage(id: id, content: body["content"]?.stringValue,
                     messageType: body["messagetype"]?.stringValue, imDisplayName: "Alex Example",
                     from: .string("8:orgid:fixture-a"), originalArrivalTime: id,
                     composeTime: "2026-11-01T00:00:00Z", version: "2", properties: body["properties"])
             }
-            data = method == "GET" ? try JSONEncoder().encode(message(index - 1_800_000_000_000, account: account)) : Data("{}".utf8)
+            data = method == "GET" ? try JSONEncoder().encode(message(index - 1_800_000_000_000, account: account, chat: chat)) : Data("{}".utf8)
         } else if method == "PUT", url.path.hasSuffix("/properties"), !components.contains("messages") {
             data = Data("{}".utf8)
         } else {
