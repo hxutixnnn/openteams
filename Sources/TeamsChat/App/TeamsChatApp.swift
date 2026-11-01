@@ -45,6 +45,7 @@ struct TeamsChatApp: App {
             if TeamsPerformanceFixtureConfiguration.enabled {
                 TeamsPerformanceFixtureView()
                     .defaultAppStorage(TeamsPerformanceFixtureConfiguration.defaults)
+                    .modifier(TeamsPerformanceFixtureAppearance())
             } else if ProcessInfo.processInfo.arguments.contains("--showcase"), let showcaseDefaults {
                 ContentView(store: store, showcaseDetails: ProcessInfo.processInfo.arguments.contains("--showcase-dark"))
                     .defaultAppStorage(showcaseDefaults)
@@ -92,6 +93,7 @@ struct TeamsChatApp: App {
             if TeamsPerformanceFixtureConfiguration.enabled {
                 SettingsView(connection: connection, isolated: true)
                     .defaultAppStorage(TeamsPerformanceFixtureConfiguration.defaults)
+                    .modifier(TeamsPerformanceFixtureAppearance())
                     .tint(ChatTheme.accent)
             } else {
                 SettingsView(connection: connection)
@@ -108,6 +110,7 @@ struct TeamsChatApp: App {
             if TeamsPerformanceFixtureConfiguration.enabled {
                 ContentView(store: store)
                     .defaultAppStorage(TeamsPerformanceFixtureConfiguration.defaults)
+                    .modifier(TeamsPerformanceFixtureAppearance())
                     .tint(ChatTheme.accent).frame(minWidth: 820, minHeight: 580)
             } else {
                 ContentView(store: store).tint(ChatTheme.accent).frame(minWidth: 820, minHeight: 580)

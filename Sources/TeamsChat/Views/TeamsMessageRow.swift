@@ -352,11 +352,16 @@ private struct TeamsInlineImageView: View {
                     Button("Close") { showPreview = false }
                     let displayed = fullPicture ?? picture
                     AnimatedTeamsImage(image: displayed).aspectRatio(displayed.size.width / max(displayed.size.height, 1), contentMode: .fit)
-                }.padding(20).frame(minWidth: 500, minHeight: 350)
-                    .task(id: revision.uuidString + image.url.absoluteString) {
-                        fullPicture = nil
-                        if let data = try? await load(image, true), !Task.isCancelled { fullPicture = NSImage(data: data) }
-                    }
+                }
+                .padding(20)
+                .modifier(TeamsInsetPanel())
+                .background(TeamsSurface.window)
+                .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
+                .frame(minWidth: 500, minHeight: 350)
+                .task(id: revision.uuidString + image.url.absoluteString) {
+                    fullPicture = nil
+                    if let data = try? await load(image, true), !Task.isCancelled { fullPicture = NSImage(data: data) }
+                }
             }
         }
         .onChange(of: showPreview) { _, showing in if !showing { fullPicture = nil } }
