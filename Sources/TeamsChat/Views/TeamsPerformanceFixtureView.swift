@@ -6,6 +6,7 @@ import TeamsCore
 
 @MainActor enum TeamsPerformanceFixtureConfiguration {
     static let enabled = Bundle.main.object(forInfoDictionaryKey: "OpenTeamsPerformanceFixtureRoot") != nil || ProcessInfo.processInfo.arguments.contains("--performance-fixture")
+    static let startupConversation = PerformanceFixtureStartupConversation(rawValue: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureStartupConversation") as? String ?? "project") ?? .project
     static let defaults = UserDefaults(suiteName: "OpenTeams.performance-fixture." + UUID().uuidString)!
     static let root: URL? = {
         guard let path = Bundle.main.object(forInfoDictionaryKey: "OpenTeamsPerformanceFixtureRoot") as? String else { return nil }
@@ -119,7 +120,8 @@ private struct PerformanceFixtureContent: View {
                 .font(.caption).padding(8)
             }
             TeamsReadContentView(store: controller.store, refreshCoordinator: controller.coordinator,
-                                 notificationRouter: router, connect: {}, persistSelection: false)
+                                 notificationRouter: router, connect: {}, persistSelection: false,
+                                 fixtureStartupConversation: TeamsPerformanceFixtureConfiguration.startupConversation)
         }
         .frame(minWidth: 1000, minHeight: 650)
         .task { await controller.connect("fixture-a") }

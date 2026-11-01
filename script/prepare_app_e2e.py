@@ -14,6 +14,7 @@ parser.add_argument("--cached-history-count", type=int, choices=[0, 200, 2000], 
 parser.add_argument("--allow-fictional-send", action="store_true")
 parser.add_argument("--enable-cached-load-hold", action="store_true")
 parser.add_argument("--skip-build", action="store_true")
+parser.add_argument("--startup-conversation", choices=["project", "planning"], default="project")
 arguments = parser.parse_args()
 if arguments.allow_fictional_send and not arguments.cached_history_count:
     parser.error("--allow-fictional-send requires --cached-history-count")
@@ -47,6 +48,7 @@ with (contents / "Info.plist").open("wb") as stream:
         "OpenTeamsCachedHistoryCount": arguments.cached_history_count,
         "OpenTeamsFictionalSendEnabled": arguments.allow_fictional_send,
         "OpenTeamsCachedLoadHoldEnabled": arguments.enable_cached_load_hold,
+        "OpenTeamsFixtureStartupConversation": arguments.startup_conversation,
     }, stream)
 manifest = {
     "bundle": str(bundle), "root": str(root), "bundle_id": identity,
@@ -55,6 +57,7 @@ manifest = {
     "cached_history_count": arguments.cached_history_count,
     "fictional_send_enabled": arguments.allow_fictional_send,
     "cached_load_hold_enabled": arguments.enable_cached_load_hold,
+    "startup_conversation": arguments.startup_conversation,
     "source_sha256": {
         str(path.relative_to(repository)): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted((repository / "Sources").rglob("*.swift"))

@@ -7,7 +7,7 @@ import tempfile
 
 parser = argparse.ArgumentParser(description="Run isolated core workflows and benchmarks. These do not replace app-level E2E verification.")
 parser.add_argument("--skip-build", action="store_true")
-parser.add_argument("--scenario", choices=["ComposerPersistence", "ComposerWorkload", "LoadingInteractions", "CachedConversationLoading", "CachedLoadWorkflows", "SendDuringCachedLoad", "CachedLoadHold"])
+parser.add_argument("--scenario", choices=["ComposerPersistence", "ComposerWorkload", "LoadingInteractions", "CachedConversationLoading", "CachedLoadWorkflows", "SendDuringCachedLoad", "CachedLoadHold", "FixtureStartupConversation"])
 arguments = parser.parse_args()
 repository = Path(__file__).resolve().parent.parent
 
@@ -36,6 +36,9 @@ with tempfile.TemporaryDirectory(prefix="openteams-performance-e2e-") as directo
             continue
         executable = Path(directory) / source.stem
         extra = ["-D", "DEBUG", repository / "Sources/TeamsChat/Views/PerformanceFixtureTransport.swift"] if source.stem == "CachedLoadHold" else []
+        if source.stem == "FixtureStartupConversation":
+            extra = ["-D", "DEBUG", repository / "Sources/TeamsChat/Views/PerformanceFixtureTransport.swift",
+                     repository / "Sources/TeamsChat/Views/PerformanceFixtureStartupConversation.swift"]
         run(["swiftc", *extra, "-parse-as-library", "-swift-version", "6", "-Onone", "-I", module_path, source, *objects, "-o", executable])
         run([executable])
 
