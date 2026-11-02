@@ -637,22 +637,34 @@ public final class TeamsReaderStore {
     public func markVisibleConversationRead(_ chatID: String, messageID: String) async {
         await performMarkConversationRead(chatID, finishKnownPartial: false, visibleMessageID: messageID)
     }
-    private func performMarkConversationRead(_ chatID: String, finishKnownPartial: Bool, visibleMessageID: String? = nil) async {
+    public func retryVisibleConversationRead(_ chatID: String, messageID: String) async {
+        for attempt in 0..<3 {
+            if attempt > 0 {
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            }
+            guard !Task.isCancelled else { return }
+            var retry = false
+            await performMarkConversationRead(chatID, finishKnownPartial: false, visibleMessageID: messageID) { retry = true }
+            if !retry { return }
+        }
+    }
+    private func performMarkConversationRead(_ chatID: String, finishKnownPartial: Bool, visibleMessageID: String? = nil, retry: (() -> Void)? = nil) async {
         guard connected, let session, let cache, availableClient() != nil, markingRead[chatID] == nil, !loadingChatIDs.contains(chatID) else { return }
+        func report(_ message: String?) { if visibleMessageID == nil { chatErrors[chatID] = message } }
         let operation = UUID()
         markingRead[chatID] = operation
-        readStatusMessages[chatID] = nil
+        if visibleMessageID == nil { readStatusMessages[chatID] = nil }
         defer { if markingRead[chatID] == operation { markingRead.removeValue(forKey: chatID) } }
         let current = generation, revision = sessionRevision
         defer { Task { await self.refreshPendingReadStatus(chatID, generation: current) } }
         let lease: TeamsReadLease
         do {
             guard let acquired = try await cache.acquireReadLease(in: chatID) else {
-                if current == generation, revision == sessionRevision { chatErrors[chatID] = "A read update is already in progress for this conversation." }
+                if current == generation, revision == sessionRevision { report("A read update is already in progress for this conversation.") }
                 return
             }
             lease = acquired
-        } catch { if current == generation, revision == sessionRevision { chatErrors[chatID] = "Could not safely coordinate the read update." }; return }
+        } catch { if current == generation, revision == sessionRevision { report("Could not safely coordinate the read update.") }; return }
         defer { withExtendedLifetime(lease) {} }
         guard current == generation, revision == sessionRevision, connected, markingRead[chatID] == operation else { return }
         if visibleMessageID == nil { await loadConversation(chatID) }
@@ -662,15 +674,15 @@ public final class TeamsReaderStore {
               visibleMessageID == nil || latest.id == visibleMessageID else { return }
         if let known = conversation(chatID)?.lastMessage?.arrivalDate,
            let loaded = latest.arrivalDate, known > loaded {
-            chatErrors[chatID] = "Refresh this conversation before marking it as read."
+            report("Refresh this conversation before marking it as read.")
             return
         }
         guard let rawArrival = TeamsChatActionsClient.arrivalMilliseconds(latest.originalArrivalTime), rawArrival > 0 else {
-            chatErrors[chatID] = "The latest message has no usable read position."; return
+            report("The latest message has no usable read position."); return
         }
         let target = UInt64(rawArrival)
         func stillCurrent() -> Bool {
-            current == generation && revision == sessionRevision && connected && markingRead[chatID] == operation && availableClient() != nil
+            current == generation && revision == sessionRevision && connected && markingRead[chatID] == operation && availableClient() != nil && (visibleMessageID == nil || !Task.isCancelled)
         }
         func confirmed(_ state: TeamsReadState, target: UInt64, minimumVersion: String?) -> Bool {
             guard case .known(let horizon, _, _) = state.horizon else { return false }
@@ -699,52 +711,63 @@ public final class TeamsReaderStore {
         do {
             let pending = try await cache.pendingRead(in: chatID)
             guard stillCurrent() else { return }
-            let reader = TeamsReadStateClient(session: session, transport: transport)
-            let before = try await reader.state(in: chatID)
-            guard stillCurrent() else { return }
             if visibleMessageID != nil, pending != nil { return }
+            let reader = TeamsReadStateClient(session: session, transport: transport)
+            let before: TeamsReadState
+            do { before = try await reader.state(in: chatID) }
+            catch {
+                if pending == nil, stillCurrent(), let web = error as? TeamsWebClientError {
+                    switch web {
+                    case .network: retry?()
+                    case .http(let status, _) where status == 408 || status >= 500: retry?()
+                    default: break
+                    }
+                }
+                throw error
+            }
+            guard stillCurrent() else { return }
             if let pending, pending.stage == .prepared || pending.stage == .bookmarkRejected || (pending.stage == .horizonRejected && !pending.bookmarkRequired) {
                 _ = try await cache.clearPendingRead(id: pending.id, in: chatID)
                 if stillCurrent() {
-                    chatErrors[chatID] = pending.stage == .prepared ? "The earlier update was not sent. Mark as read again to retry." : "The earlier update was rejected. Mark as read again to retry."
+                    report(pending.stage == .prepared ? "The earlier update was not sent. Mark as read again to retry." : "The earlier update was rejected. Mark as read again to retry.")
                 }
                 return
             }
             if let pending, confirmed(before, target: pending.targetHorizon, minimumVersion: pending.minimumVersion) {
                 guard try await cache.clearPendingRead(id: pending.id, in: chatID) else {
-                    if stillCurrent() { chatErrors[chatID] = "The read state changed while checking. Check again before updating." }
+                    if stillCurrent() { report("The read state changed while checking. Check again before updating.") }
                     return
                 }
                 guard stillCurrent() else { return }
-                chatErrors[chatID] = nil
+                report(nil)
                 readStatusMessages[chatID] = "The earlier read update was confirmed."
                 await refreshChats()
                 if stillCurrent(), target > pending.targetHorizon {
                     readStatusMessages[chatID] = nil
-                    chatErrors[chatID] = "The earlier read update was confirmed. Mark as read again to include newer messages."
+                    report("The earlier read update was confirmed. Mark as read again to include newer messages.")
                 }
                 return
             }
             if let pending {
                 guard finishKnownPartial, versionAcceptable(before, minimum: pending.minimumVersion),
                       pending.stage == .bookmarkAccepted || (pending.stage == .horizonRejected && pending.bookmarkRequired) else {
-                    chatErrors[chatID] = "A previous read update could not be confirmed. Check the conversation's read state before trying again."
+                    report("A previous read update could not be confirmed. Check the conversation's read state before trying again.")
                     return
                 }
             }
             guard case .known(let horizon, _, _) = before.horizon else {
-                chatErrors[chatID] = "Teams did not return a complete read state. Try again after refreshing."
+                report("Teams did not return a complete read state. Try again after refreshing.")
                 return
             }
             let bookmark: UInt64
             switch before.bookmark {
             case .unset: bookmark = 0
             case .known(let value, _, _): bookmark = value
-            default: chatErrors[chatID] = "Teams did not return a complete read state. Try again after refreshing."; return
+            default: report("Teams did not return a complete read state. Try again after refreshing."); return
             }
             if visibleMessageID != nil && bookmark > 0 { return }
             if let pending, target < pending.targetHorizon, horizon < pending.targetHorizon {
-                chatErrors[chatID] = "The saved read target is newer than the available messages. Refresh before finishing."
+                report("The saved read target is newer than the available messages. Refresh before finishing.")
                 return
             }
             if pending == nil && horizon >= target && bookmark == 0 { await refreshChats(); return }
@@ -756,7 +779,7 @@ public final class TeamsReaderStore {
             } else {
                 intent = TeamsPendingReadIntent(targetHorizon: max(horizon, target), bookmarkRequired: bookmark > 0, minimumVersion: before.version)
                 guard try await cache.installPendingRead(intent, in: chatID) else {
-                    if stillCurrent() { chatErrors[chatID] = "A previous read update needs confirmation before trying again." }
+                    if stillCurrent() { report("A previous read update needs confirmation before trying again.") }
                     return
                 }
             }
@@ -812,26 +835,26 @@ public final class TeamsReaderStore {
             let after = try await reader.state(in: chatID)
             guard stillCurrent() else { return }
             guard confirmed(after, target: max(horizon, target), minimumVersion: intent.minimumVersion) else {
-                chatErrors[chatID] = "The read update was sent but could not be confirmed. Check its state before trying again."
+                report("The read update was sent but could not be confirmed. Check its state before trying again.")
                 return
             }
             guard try await cache.clearPendingRead(id: intent.id, in: chatID) else {
-                if stillCurrent() { chatErrors[chatID] = "The read state changed while confirming. Check again before updating." }
+                if stillCurrent() { report("The read state changed while confirming. Check again before updating.") }
                 return
             }
             guard stillCurrent() else { return }
-            chatErrors[chatID] = nil
-            readStatusMessages[chatID] = "Read update confirmed."
+            report(nil)
+            if visibleMessageID == nil { readStatusMessages[chatID] = "Read update confirmed." }
             await refreshChats()
         } catch {
             guard current == generation, revision == sessionRevision, markingRead[chatID] == operation else { return }
-            if let webError = error as? TeamsWebClientError { record(webError, chatID: chatID) }
+            if let webError = error as? TeamsWebClientError { record(webError, chatID: chatID, silent: visibleMessageID != nil) }
             if bookmarkAccepted && attemptedBookmark {
-                chatErrors[chatID] = definiteRejection ? "The current unread bookmark update was rejected. The earlier partial update remains; no retry was sent." : "The current unread bookmark update could not be confirmed. No automatic retry was sent."
+                report(definiteRejection ? "The current unread bookmark update was rejected. The earlier partial update remains; no retry was sent." : "The current unread bookmark update could not be confirmed. No automatic retry was sent.")
             } else {
-            chatErrors[chatID] = bookmarkAccepted
+            report(bookmarkAccepted
                 ? (localFailure ? "The unread bookmark was cleared, but the read position could not be prepared. No retry was sent." : (definiteRejection ? "The unread bookmark was cleared, but Teams rejected the read position. No automatic retry was sent." : "The unread bookmark was cleared, but the read position could not be confirmed. No automatic retry was sent."))
-                : (localFailure ? "The read update could not be prepared. No update was sent." : (definiteRejection ? "Teams rejected the read update. No update was applied." : (writeAttempted ? "The read update could not be confirmed. No automatic retry was sent." : "Teams could not read the current read state. No update was sent.")))
+                : (localFailure ? "The read update could not be prepared. No update was sent." : (definiteRejection ? "Teams rejected the read update. No update was applied." : (writeAttempted ? "The read update could not be confirmed. No automatic retry was sent." : "Teams could not read the current read state. No update was sent."))))
             }
         }
     }
@@ -1811,10 +1834,12 @@ public final class TeamsReaderStore {
         return TeamsWebClient(session: session, transport: transport)
     }
 
-    private func record(_ error: any Error, chatID: String? = nil) {
+    private func record(_ error: any Error, chatID: String? = nil, silent: Bool = false) {
         if error is CancellationError || Task.isCancelled { return }
         let message = (error as? TeamsWebClientError)?.localizedDescription ?? "Teams could not complete this read. Try again."
-        if let chatID { chatErrors[chatID] = message } else { chatListError = message }
+        if !silent {
+            if let chatID { chatErrors[chatID] = message } else { chatListError = message }
+        }
         if let failure = error as? TeamsWebClientError {
             switch failure {
             case .expiredSession, .http(status: 401, retryAfter: _):

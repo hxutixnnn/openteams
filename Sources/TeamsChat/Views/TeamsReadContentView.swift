@@ -30,6 +30,7 @@ struct TeamsReadContentView: View {
     @ViewState<CGFloat> private var windowWidth = 1180
     @ViewState<Bool> private var sidebarCollapsedForInspector = false
     @ViewState<UUID> private var windowID = UUID()
+    @ViewState<String?> private var loadedConversationKey = nil
 
     private var selectedChat: TeamsWebChat? { store.conversation(selectedID) }
     private var windowKey: String { "\(scenePhase == .active)-\(store.connected)-\(store.accountScope)-\(selectionAccount)-\(selectedID)" }
@@ -130,18 +131,24 @@ struct TeamsReadContentView: View {
                 lastSelectedAccount = store.accountScope
             }
         }
-        .task(id: conversationKey) {
-            #if DEBUG
-            if fixtureStartupConversation == .planning && fixtureStartupAccountScope != store.accountScope { return }
-            #endif
-            guard !selectedID.isEmpty, !store.accountID.isEmpty else { return }
-            await store.loadConversation(selectedID)
-        }
+        .onChange(of: conversationKey) { _, _ in loadedConversationKey = nil }
+        .task(id: conversationKey) { await loadSelectedConversation() }
+    }
+
+    private func loadSelectedConversation() async {
+        let key = conversationKey
+        loadedConversationKey = nil
+        #if DEBUG
+        if fixtureStartupConversation == .planning && fixtureStartupAccountScope != store.accountScope { return }
+        #endif
+        guard !selectedID.isEmpty, !store.accountID.isEmpty else { return }
+        await store.loadConversation(selectedID)
+        if !Task.isCancelled, key == conversationKey { loadedConversationKey = key }
     }
 
     @ViewBuilder private var detail: some View {
         if let chat = selectedChat {
-            TeamsReadDetailView(store: store, chat: chat, accountScope: store.accountScope, accountRevision: store.accountRevision, selectedChatID: $selectedID, jumpToMessage: $jumpToMessage, connect: connect, focusRequest: focusRequest, loadFilePreview: loadFilePreview)
+            TeamsReadDetailView(store: store, chat: chat, initialLoadComplete: loadedConversationKey == conversationKey, accountScope: store.accountScope, accountRevision: store.accountRevision, selectedChatID: $selectedID, jumpToMessage: $jumpToMessage, connect: connect, focusRequest: focusRequest, loadFilePreview: loadFilePreview)
                 .id(store.accountRevision.uuidString + ":" + chat.id)
                 .modifier(TeamsInsetPanel())
                 .navigationTitle(store.conversationTitle(chat))

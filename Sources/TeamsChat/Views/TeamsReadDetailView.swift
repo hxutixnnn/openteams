@@ -12,6 +12,7 @@ struct TeamsMessageDestination: Equatable {
 struct TeamsReadDetailView: View {
     var store: TeamsReaderStore
     let chat: TeamsWebChat
+    var initialLoadComplete = true
     let accountScope: String
     let accountRevision: UUID
     @Binding var selectedChatID: String
@@ -19,6 +20,8 @@ struct TeamsReadDetailView: View {
     let connect: () -> Void
     let focusRequest: UUID
     var loadFilePreview: ((TeamsSharePointAttachment) async throws -> Data)? = nil
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.controlActiveState) private var controlActiveState
     @AppStorage("compactMessages") private var compact = false
     @ViewState<String?> private var restoreAnchor: String? = nil
     @ViewState<Int> private var newMessageCount = 0
@@ -28,6 +31,7 @@ struct TeamsReadDetailView: View {
     @ViewState<UUID> private var scrollIntentRevision = UUID()
     @ViewState<Bool> private var atBottom = true
     @ViewState<Bool> private var timelineReady = false
+    @ViewState<String?> private var lastAutomaticReadAttempt = nil
     @ViewState<TeamsMessageEditSession?> private var editingMessage = nil
     @ViewState<String?> private var editOpenError = nil
     @ViewState<UUID> private var editOpenRevision = UUID()
@@ -191,10 +195,10 @@ struct TeamsReadDetailView: View {
                             guard restoreAnchor == nil, let last = messages.last?.id else { return }
                             scheduleAutomaticScroll(proxy, to: last, initial: false)
                         }, userScrolled: { noteTimelineIntent() }, layoutReady: { isBottom, hasScrollableContent in
-                            timelineReady = true
-                            atBottom = isBottom
+                            if !timelineReady { timelineReady = true }
+                            if atBottom != isBottom { atBottom = isBottom }
                             guard hasScrollableContent, !userHasScrolled, let last = messages.last?.id else { return }
-                            if isBottom { completedInitialLoadPosition = true }
+                            if isBottom { if !completedInitialLoadPosition { completedInitialLoadPosition = true } }
                             else { scheduleAutomaticScroll(proxy, to: last, initial: true) }
                         })
                     }
@@ -207,10 +211,10 @@ struct TeamsReadDetailView: View {
                 guard restoreAnchor == nil, let last = messages.last?.id else { return }
                 scheduleAutomaticScroll(proxy, to: last, initial: false)
             }, userScrolled: { noteTimelineIntent() }, layoutReady: { isBottom, hasScrollableContent in
-                timelineReady = true
-                atBottom = isBottom
+                if !timelineReady { timelineReady = true }
+                if atBottom != isBottom { atBottom = isBottom }
                 guard hasScrollableContent, !userHasScrolled, let last = messages.last?.id else { return }
-                if isBottom { completedInitialLoadPosition = true }
+                if isBottom { if !completedInitialLoadPosition { completedInitialLoadPosition = true } }
                 else { scheduleAutomaticScroll(proxy, to: last, initial: true) }
             }))
             .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in
@@ -218,11 +222,16 @@ struct TeamsReadDetailView: View {
                     scheduleAutomaticScroll(proxy, to: last, initial: false)
                 }
             }
-            .task(id: "\(chat.id):\(messages.last?.id ?? ""):\(atBottom):\(loading):\(timelineReady):\(chat.isRead == false)") {
-                guard timelineReady, atBottom, !loading, chat.isRead == false, let messageID = messages.last?.id else { return }
+            .task(id: "\(chat.id):\(messages.last?.id ?? ""):\(atBottom):\(loading):\(timelineReady):\(chat.isRead == false):\(initialLoadComplete):\(scenePhase):\(controlActiveState):\(store.pendingReadChatIDs.contains(chat.id))") {
+                if store.pendingReadChatIDs.contains(chat.id) { lastAutomaticReadAttempt = nil; return }
+                guard initialLoadComplete, scenePhase == .active, controlActiveState == .key, timelineReady, atBottom, !loading, chat.isRead == false, let messageID = messages.last?.id else { return }
+                let attempt = "\(messageID):\(store.pendingReadChatIDs.contains(chat.id))"
+                guard lastAutomaticReadAttempt != attempt else { return }
                 try? await Task.sleep(for: .milliseconds(500))
                 guard !Task.isCancelled, selectedChatID == chat.id, store.accountRevision == accountRevision else { return }
-                Task { await store.markVisibleConversationRead(chat.id, messageID: messageID) }
+                lastAutomaticReadAttempt = attempt
+                await store.retryVisibleConversationRead(chat.id, messageID: messageID)
+                if Task.isCancelled, lastAutomaticReadAttempt == attempt { lastAutomaticReadAttempt = nil }
             }
             .defaultScrollAnchor(.bottom)
             .overlay(alignment: .topLeading) {
