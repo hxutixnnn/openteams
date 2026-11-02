@@ -75,6 +75,8 @@ public final class TeamsReaderStore {
     private var mediaClient: TeamsMediaClient?
     private var cache: TeamsReadCache?
     private var histories: [String: TeamsCachedHistory] = [:]
+    private var cachedLoadCounts: [String: Int] = [:]
+    private let cachedMessageRenderer = TeamsCachedMessageRenderer()
     private struct RenderingInputs {
         let messages: [TeamsWebMessage]
         let messageIndices: [String: Int]
@@ -186,6 +188,9 @@ public final class TeamsReaderStore {
     }
 
     public func disconnect() {
+        #if DEBUG
+        cachedLoadGate?.invalidate(reason: "disconnected")
+        #endif
         closeMessageContext()
         generation = UUID()
         markingRead = [:]
@@ -201,6 +206,7 @@ public final class TeamsReaderStore {
         sessionExpired = false
         reacting = []
         loadingChatIDs = []
+        cachedLoadCounts = [:]
         isLoadingChats = false
         loadingFolders = false
         chatListError = nil
@@ -208,6 +214,7 @@ public final class TeamsReaderStore {
     }
 
     public func messages(in id: String) -> [TeamsRenderedMessage] { renderedMessages[id] ?? [] }
+    public func isLoadingConversation(_ id: String) -> Bool { loadingChatIDs.contains(id) || cachedLoadCounts[id, default: 0] > 0 }
     public func ownsSharePointAttachment(_ attachment: TeamsSharePointAttachment) -> Bool {
         guard attachment.accountScope == accountScope, attachment.accountRevision == accountRevision else { return false }
         if let revision = attachment.contextRevision {
@@ -1406,7 +1413,7 @@ public final class TeamsReaderStore {
 
     @discardableResult public func sendDraft(in id: String) async -> String? {
         guard let chat = conversation(id), chat.isDisabled != true,
-              chat.isConversationDeleted != true else { return nil }
+              chat.isConversationDeleted != true, let cache else { return nil }
         let current = generation
         let draftReply = composer.replies[id]
         var reply = draftReply.flatMap { target in histories[id]?.messages.first { $0.id == target.messageID } ?? (contextChatID == id ? contextRawMessages.first { $0.id == target.messageID } : nil) }
@@ -1427,12 +1434,17 @@ public final class TeamsReaderStore {
                   composer.finishPreparation(in: id, revision: preparation) else { return nil }
         }
         guard let sent = await composer.sendDraft(in: id, replyingTo: reply, preview: draftReply?.preview ?? ""), current == generation else { return nil }
-        var history = histories[id] ?? TeamsCachedHistory()
-        history.merge([sent])
-        histories[id] = history
-        render(id)
-        do { try await cache?.save(history, in: id) }
-        catch { if current == generation { cacheWarning = "The message was sent, but could not be saved on this Mac." } }
+        do {
+            var history: TeamsCachedHistory
+            if let existing = histories[id] { history = existing }
+            else { history = try await cache.history(in: id) }
+            guard current == generation else { return nil }
+            history = histories[id] ?? history
+            history.merge([sent])
+            histories[id] = history
+            render(id)
+            try await cache.save(history, in: id)
+        } catch { if current == generation { cacheWarning = "The message was sent, but could not be saved on this Mac." } }
         guard current == generation else { return nil }
         await refreshConversation(id)
         return sent.id
@@ -1492,20 +1504,64 @@ public final class TeamsReaderStore {
         }
     }
 
+    #if DEBUG
+    @ObservationIgnored public var cachedLoadGate: TeamsCachedLoadGate?
+    @ObservationIgnored public var onCachedLoadTiming: (@MainActor (String, Double, Bool) -> Void)?
+    #endif
+
     public func loadConversation(_ id: String) async {
         Task { await self.refreshGroupPictureMetadata(id) }
         let current = generation
-        if histories[id] == nil, let cache {
+        if renderedMessages[id] == nil, let cache {
+            cachedLoadCounts[id, default: 0] += 1
+            defer { if current == generation { cachedLoadCounts[id, default: 0] -= 1 } }
             do {
-                let history = try await cache.history(in: id)
+                #if DEBUG
+                let cacheStart = ContinuousClock.now
+                #endif
+                var history: TeamsCachedHistory
+                if let existing = histories[id] { history = existing }
+                else { history = try await cache.history(in: id) }
                 guard current == generation, !Task.isCancelled else { return }
+                history = histories[id] ?? history
                 histories[id] = history
-                render(id)
+                #if DEBUG
+                onCachedLoadTiming?("cache_read", cachedLoadMilliseconds(since: cacheStart), false)
+                #endif
+                if renderedMessages[id] == nil {
+                    let people = renderingPeople(in: id), scope = accountScope, epoch = accountRevision
+                    #if DEBUG
+                    let gate = cachedLoadGate
+                    let request = TeamsCachedLoadGate.Request(accountScope: scope, accountRevision: epoch, generation: current, chatID: id)
+                    var preparationCompleted = false
+                    defer { gate?.complete(request, cancelled: !preparationCompleted) }
+                    try await gate?.wait(request)
+                    guard current == generation, epoch == accountRevision, !Task.isCancelled else { return }
+                    #endif
+                    let prepared = try await cachedMessageRenderer.render(history.messages, people: people, accountScope: scope, accountRevision: epoch, chatID: id)
+                    guard current == generation, !Task.isCancelled else { return }
+                    #if DEBUG
+                    onCachedLoadTiming?("conversion", prepared.conversionMilliseconds, prepared.convertedOnMainThread)
+                    let publicationStart = ContinuousClock.now
+                    #endif
+                    if histories[id]?.messages == history.messages {
+                        if people == renderingPeople(in: id) {
+                            composer.reconcile(history.messages, in: id)
+                            renderingInputs[id] = RenderingInputs(messages: history.messages, messageIndices: prepared.indices, people: people, accountScope: scope, accountRevision: epoch)
+                            if renderedMessages[id] != prepared.messages { renderedMessages[id] = prepared.messages }
+                        } else { render(id) }
+                    }
+                    #if DEBUG
+                    onCachedLoadTiming?("publication", cachedLoadMilliseconds(since: publicationStart), true)
+                    preparationCompleted = true
+                    #endif
+                }
             } catch {
-                guard current == generation else { return }
+                guard current == generation, !Task.isCancelled, !(error is CancellationError) else { return }
                 cacheWarning = "Saved messages could not be read. A new download will replace this conversation's cache."
             }
         }
+        guard current == generation, !Task.isCancelled else { return }
         await refreshConversation(id)
     }
 
@@ -1588,6 +1644,9 @@ public final class TeamsReaderStore {
     }
 
     private func resetAccount(accountID: String, tenantID: String, displayName: String) {
+        #if DEBUG
+        cachedLoadGate?.invalidate(reason: "account_changed")
+        #endif
         accountRevision = UUID()
         closeMessageContext()
         generation = UUID()
@@ -1604,6 +1663,7 @@ public final class TeamsReaderStore {
         cache = TeamsReadCache(root: cacheRoot, accountID: accountID, tenantID: tenantID)
         composer.restore(accountID: accountID, tenantID: tenantID)
         chats = []; histories = [:]; renderedMessages = [:]; groupPictureLookups = [:]; groupPictureFreshness = [:]; groupPictureListMetadata = []
+        cachedLoadCounts = [:]
         renderingInputs = [:]
         serverChatSnapshot = nil
         pendingReadChatIDs = []; finishableReadChatIDs = []; readStatusMessages = [:]
@@ -1706,14 +1766,19 @@ public final class TeamsReaderStore {
         return messages.first { $0.id == id }
     }
 
-    private func render(_ id: String) {
-        let messages = histories[id]?.messages ?? []
-        composer.reconcile(messages, in: id)
+    private func renderingPeople(in id: String) -> [String: Person] {
         var people: [String: Person] = [:]
         for member in conversation(id)?.members ?? [] {
             guard let key = member.mri ?? member.objectId else { continue }
             people[key] = Person(id: key, name: member.preferredDisplayName ?? "Teams member")
         }
+        return people
+    }
+
+    private func render(_ id: String) {
+        let messages = histories[id]?.messages ?? []
+        composer.reconcile(messages, in: id)
+        let people = renderingPeople(in: id)
         let previous = renderingInputs[id]
         let canReuse = previous?.people == people && previous?.accountScope == accountScope
             && previous?.accountRevision == accountRevision
@@ -1767,3 +1832,41 @@ public final class TeamsReaderStore {
 
     private func nonempty(_ string: String?) -> String? { string.flatMap { $0.isEmpty ? nil : $0 } }
 }
+
+private actor TeamsCachedMessageRenderer {
+    struct Prepared: Sendable {
+        let messages: [TeamsRenderedMessage]
+        let indices: [String: Int]
+        #if DEBUG
+        let conversionMilliseconds: Double
+        let convertedOnMainThread: Bool
+        #endif
+    }
+
+    func render(_ messages: [TeamsWebMessage], people: [String: Person], accountScope: String, accountRevision: UUID, chatID: String) throws -> Prepared {
+        #if DEBUG
+        let start = ContinuousClock.now
+        #endif
+        var rendered: [TeamsRenderedMessage] = []
+        var indices: [String: Int] = [:]
+        rendered.reserveCapacity(messages.count)
+        indices.reserveCapacity(messages.count)
+        for message in messages {
+            try Task.checkCancellation()
+            if indices[message.id] == nil { indices[message.id] = rendered.count }
+            rendered.append(TeamsRenderedMessage(message, people: people, accountScope: accountScope, accountRevision: accountRevision, chatID: chatID))
+        }
+        #if DEBUG
+        return Prepared(messages: rendered, indices: indices, conversionMilliseconds: cachedLoadMilliseconds(since: start), convertedOnMainThread: Thread.isMainThread)
+        #else
+        return Prepared(messages: rendered, indices: indices)
+        #endif
+    }
+}
+
+#if DEBUG
+private func cachedLoadMilliseconds(since start: ContinuousClock.Instant) -> Double {
+    let duration = start.duration(to: .now).components
+    return Double(duration.seconds) * 1000 + Double(duration.attoseconds) / 1e15
+}
+#endif
