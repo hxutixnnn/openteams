@@ -27,6 +27,7 @@ struct TeamsReadDetailView: View {
     @ViewState<Bool> private var userHasScrolled = false
     @ViewState<UUID> private var scrollIntentRevision = UUID()
     @ViewState<Bool> private var atBottom = true
+    @ViewState<Bool> private var timelineReady = false
     @ViewState<TeamsMessageEditSession?> private var editingMessage = nil
     @ViewState<String?> private var editOpenError = nil
     @ViewState<UUID> private var editOpenRevision = UUID()
@@ -190,6 +191,8 @@ struct TeamsReadDetailView: View {
                             guard restoreAnchor == nil, let last = messages.last?.id else { return }
                             scheduleAutomaticScroll(proxy, to: last, initial: false)
                         }, userScrolled: { noteTimelineIntent() }, layoutReady: { isBottom, hasScrollableContent in
+                            timelineReady = true
+                            atBottom = isBottom
                             guard hasScrollableContent, !userHasScrolled, let last = messages.last?.id else { return }
                             if isBottom { completedInitialLoadPosition = true }
                             else { scheduleAutomaticScroll(proxy, to: last, initial: true) }
@@ -204,6 +207,8 @@ struct TeamsReadDetailView: View {
                 guard restoreAnchor == nil, let last = messages.last?.id else { return }
                 scheduleAutomaticScroll(proxy, to: last, initial: false)
             }, userScrolled: { noteTimelineIntent() }, layoutReady: { isBottom, hasScrollableContent in
+                timelineReady = true
+                atBottom = isBottom
                 guard hasScrollableContent, !userHasScrolled, let last = messages.last?.id else { return }
                 if isBottom { completedInitialLoadPosition = true }
                 else { scheduleAutomaticScroll(proxy, to: last, initial: true) }
@@ -212,6 +217,12 @@ struct TeamsReadDetailView: View {
                 if atBottom, let last = messages.last?.id {
                     scheduleAutomaticScroll(proxy, to: last, initial: false)
                 }
+            }
+            .task(id: "\(chat.id):\(messages.last?.id ?? ""):\(atBottom):\(loading):\(timelineReady):\(chat.isRead == false)") {
+                guard timelineReady, atBottom, !loading, chat.isRead == false, let messageID = messages.last?.id else { return }
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled, selectedChatID == chat.id, store.accountRevision == accountRevision else { return }
+                Task { await store.markVisibleConversationRead(chat.id, messageID: messageID) }
             }
             .defaultScrollAnchor(.bottom)
             .overlay(alignment: .topLeading) {

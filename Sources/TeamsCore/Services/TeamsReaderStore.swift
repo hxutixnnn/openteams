@@ -634,7 +634,10 @@ public final class TeamsReaderStore {
 
     public func markConversationRead(_ chatID: String) async { await performMarkConversationRead(chatID, finishKnownPartial: false) }
     public func finishMarkConversationRead(_ chatID: String) async { await performMarkConversationRead(chatID, finishKnownPartial: true) }
-    private func performMarkConversationRead(_ chatID: String, finishKnownPartial: Bool) async {
+    public func markVisibleConversationRead(_ chatID: String, messageID: String) async {
+        await performMarkConversationRead(chatID, finishKnownPartial: false, visibleMessageID: messageID)
+    }
+    private func performMarkConversationRead(_ chatID: String, finishKnownPartial: Bool, visibleMessageID: String? = nil) async {
         guard connected, let session, let cache, availableClient() != nil, markingRead[chatID] == nil, !loadingChatIDs.contains(chatID) else { return }
         let operation = UUID()
         markingRead[chatID] = operation
@@ -652,10 +655,11 @@ public final class TeamsReaderStore {
         } catch { if current == generation, revision == sessionRevision { chatErrors[chatID] = "Could not safely coordinate the read update." }; return }
         defer { withExtendedLifetime(lease) {} }
         guard current == generation, revision == sessionRevision, connected, markingRead[chatID] == operation else { return }
-        await loadConversation(chatID)
+        if visibleMessageID == nil { await loadConversation(chatID) }
         guard current == generation, revision == sessionRevision, connected, markingRead[chatID] == operation,
               availableClient() != nil, chatErrors[chatID] == nil,
-              let latest = histories[chatID]?.messages.last else { return }
+              let latest = histories[chatID]?.messages.last,
+              visibleMessageID == nil || latest.id == visibleMessageID else { return }
         if let known = conversation(chatID)?.lastMessage?.arrivalDate,
            let loaded = latest.arrivalDate, known > loaded {
             chatErrors[chatID] = "Refresh this conversation before marking it as read."
@@ -698,6 +702,7 @@ public final class TeamsReaderStore {
             let reader = TeamsReadStateClient(session: session, transport: transport)
             let before = try await reader.state(in: chatID)
             guard stillCurrent() else { return }
+            if visibleMessageID != nil, pending != nil { return }
             if let pending, pending.stage == .prepared || pending.stage == .bookmarkRejected || (pending.stage == .horizonRejected && !pending.bookmarkRequired) {
                 _ = try await cache.clearPendingRead(id: pending.id, in: chatID)
                 if stillCurrent() {
@@ -737,6 +742,7 @@ public final class TeamsReaderStore {
             case .known(let value, _, _): bookmark = value
             default: chatErrors[chatID] = "Teams did not return a complete read state. Try again after refreshing."; return
             }
+            if visibleMessageID != nil && bookmark > 0 { return }
             if let pending, target < pending.targetHorizon, horizon < pending.targetHorizon {
                 chatErrors[chatID] = "The saved read target is newer than the available messages. Refresh before finishing."
                 return
