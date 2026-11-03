@@ -51,6 +51,7 @@ struct TeamsReadContentView: View {
         } detail: {
             detail
                 .toolbar { toolbar }
+                .toolbarBackground(.hidden, for: .windowToolbar)
         }
         .background(TeamsWindowProbe { window in
             refreshCoordinator.attachWindow(windowID, window: window)
