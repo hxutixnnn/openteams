@@ -28,6 +28,7 @@ struct TeamsReadContentView: View {
     @ViewState<NewChatPresentation?> private var newChatPresentation = nil
     @ViewState<NavigationSplitViewVisibility> private var columnVisibility = .all
     @ViewState<UUID> private var windowID = UUID()
+    @ViewState<String?> private var loadedConversationKey = nil
 
     private var selectedChat: TeamsWebChat? { store.conversation(selectedID) }
     private var windowKey: String { "\(scenePhase == .active)-\(store.connected)-\(store.accountScope)-\(selectionAccount)-\(selectedID)" }
@@ -51,6 +52,7 @@ struct TeamsReadContentView: View {
                 else { detail.frame(maxWidth: .infinity, maxHeight: .infinity).modifier(TeamsInsetPanel()) }
             }
             .toolbar { toolbar }
+            .toolbarBackground(.hidden, for: .windowToolbar)
         }
         .navigationSplitViewStyle(.balanced)
         .background(TeamsSurface.window)
@@ -123,19 +125,25 @@ struct TeamsReadContentView: View {
                 lastSelectedAccount = store.accountScope
             }
         }
-        .task(id: conversationKey) {
-            #if DEBUG
-            if fixtureStartupConversation == .planning && fixtureStartupAccountScope != store.accountScope { return }
-            #endif
-            guard !selectedID.isEmpty, !store.accountID.isEmpty else { return }
-            await store.loadConversation(selectedID)
-        }
+        .onChange(of: conversationKey) { _, _ in loadedConversationKey = nil }
+        .task(id: conversationKey) { await loadSelectedConversation() }
+    }
+
+    private func loadSelectedConversation() async {
+        let key = conversationKey
+        loadedConversationKey = nil
+        #if DEBUG
+        if fixtureStartupConversation == .planning && fixtureStartupAccountScope != store.accountScope { return }
+        #endif
+        guard !selectedID.isEmpty, !store.accountID.isEmpty else { return }
+        await store.loadConversation(selectedID)
+        if !Task.isCancelled, key == conversationKey { loadedConversationKey = key }
     }
 
     @ViewBuilder private var detail: some View {
         if let chat = selectedChat {
             TeamsConversationLayout(showInspector: $showInspector) {
-                TeamsReadDetailView(store: store, chat: chat, accountScope: store.accountScope, accountRevision: store.accountRevision, selectedChatID: $selectedID, jumpToMessage: $jumpToMessage, connect: connect, focusRequest: focusRequest, loadFilePreview: loadFilePreview)
+                TeamsReadDetailView(store: store, chat: chat, initialLoadComplete: loadedConversationKey == conversationKey, accountScope: store.accountScope, accountRevision: store.accountRevision, selectedChatID: $selectedID, jumpToMessage: $jumpToMessage, connect: connect, focusRequest: focusRequest, loadFilePreview: loadFilePreview)
                     .id(store.accountRevision.uuidString + ":" + chat.id)
             } inspector: {
                 TeamsReadInspector(store: store, chat: chat, accountScope: store.accountScope, accountRevision: store.accountRevision, isCurrent: { selectedID == chat.id }, connect: connect, tab: $inspectorTab,
