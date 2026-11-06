@@ -190,7 +190,7 @@ struct TeamsReadDetailView: View {
                 }
                 .scrollTargetLayout()
                 #if DEBUG
-                .modifier(TeamsScrollBenchmarkTarget(ids: messages.map(\.id)))
+                .modifier(TeamsScrollBenchmarkTarget(ids: messages.map(\.id), markScrollIntent: { noteTimelineIntent() }))
                 #endif
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .frame(maxWidth: 800)

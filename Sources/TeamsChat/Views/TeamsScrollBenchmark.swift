@@ -62,7 +62,7 @@ import SwiftUI
     private let mode = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--scroll-benchmark-mode=") })
         .map { String($0.dropFirst("--scroll-benchmark-mode=".count)) } ?? "jump"
 
-    func start(ids: [String], output: URL) {
+    func start(ids: [String], output: URL, markScrollIntent: @escaping () -> Void) {
         guard !started, ids.count > 4 else { return }
         started = true
         self.ids = ids
@@ -76,6 +76,7 @@ import SwiftUI
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         targetID = ids[ids.count / 2]
+        markScrollIntent()
         if mode == "wheel" { scroll = Self.timelineScroll(in: window) }
         startTime = CACurrentMediaTime()
         if mode == "bounds" { scroll = Self.timelineScroll(in: window) }
@@ -209,6 +210,7 @@ import SwiftUI
 
 struct TeamsScrollBenchmarkTarget: ViewModifier {
     let ids: [String]
+    let markScrollIntent: () -> Void
     @State private var driver = TeamsScrollBenchmarkDriver()
 
     func body(content: Content) -> some View {
@@ -218,7 +220,7 @@ struct TeamsScrollBenchmarkTarget: ViewModifier {
                 guard TeamsScrollBenchmarkDriver.requested, !ids.isEmpty,
                       let root = TeamsPerformanceFixtureConfiguration.root else { return }
                 try? await Task.sleep(for: .seconds(3))
-                driver.start(ids: ids, output: root.appendingPathComponent("scroll-benchmark.json"))
+                driver.start(ids: ids, output: root.appendingPathComponent("scroll-benchmark.json"), markScrollIntent: markScrollIntent)
             }
     }
 }
