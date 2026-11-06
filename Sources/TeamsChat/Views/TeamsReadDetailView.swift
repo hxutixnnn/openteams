@@ -39,6 +39,7 @@ struct TeamsReadDetailView: View {
     @ViewState<TeamsRenderedMessage?> private var deletingMessage = nil
     @ViewState<String> private var deletingAccount = ""
     @ViewState<Bool> private var showMessageContext = false
+    @ViewState<TeamsMessageRowActionCache> private var rowActionCache = TeamsMessageRowActionCache()
 
     private var messages: [TeamsRenderedMessage] { store.messages(in: chat.id) }
     private var loading: Bool { store.isLoadingConversation(chat.id) }
@@ -112,6 +113,34 @@ struct TeamsReadDetailView: View {
         }
     }
 
+    private func rowActions(for message: TeamsRenderedMessage, knownIDs: Set<String>) -> TeamsMessageRowActions {
+        rowActionCache.actions(for: chat.id + ":" + message.id) { actions in
+            actions.loadImage = { [store] image, fullSize in try await store.imageData(for: image, fullSize: fullSize) }
+            actions.loadPhoto = { [store] person in try await store.profilePhoto(for: person) }
+            actions.replyAuthor = { [store] reply in store.replyAuthor(reply, in: chat.id) }
+            actions.canJumpToMessage = { id in
+                knownIDs.contains(id) || (store.connected && !id.isEmpty && id.utf8.count <= 32 && id.utf8.allSatisfy { (48...57).contains($0) })
+            }
+            actions.jumpToMessage = { id in
+                noteTimelineIntent()
+                if knownIDs.contains(id) { jumpToMessage = .init(messageID: id, chatID: chat.id, accountScope: accountScope) }
+                else {
+                    showMessageContext = true
+                    Task { guard showMessageContext, selectedChatID == chat.id, accountScope == store.accountScope else { return }; await store.openMessageContext(in: chat.id, targetID: id) }
+                }
+            }
+            actions.action = { action in
+                if action == "reply" { store.composer.setReply(.init(messageID: message.id, preview: message.body.text, author: message.author.name), in: chat.id) }
+                else if action == "edit" { openEdit(messageID: message.id, accountScope: accountScope) }
+                else if action == "delete" { deletingAccount = accountScope; deletingMessage = message }
+                else if action == "check-delete" { Task { await store.checkDeletion(in: chat.id, messageID: message.id, expectedScope: accountScope, expectedRevision: accountRevision) } }
+                else if action == "dismiss-delete" { Task { await store.dismissRejectedDeletion(in: chat.id, messageID: message.id, expectedScope: accountScope, expectedRevision: accountRevision) } }
+                else { Task { await store.messageAction(action, chatID: chat.id, messageID: message.id, accountScope: accountScope) } }
+            }
+            actions.loadFilePreview = loadFilePreview
+        }
+    }
+
     private func noteTimelineIntent() { userHasScrolled = true; scrollIntentRevision = UUID(); restoreAnchor = nil }
 
     private func scheduleAutomaticScroll(_ proxy: ScrollViewProxy, to id: String, initial: Bool) {
@@ -157,6 +186,7 @@ struct TeamsReadDetailView: View {
                         }
                         .padding(.bottom, 6)
                     }
+                    let knownMessageIDs = Set(messages.map(\.id))
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         let accountScope = store.accountScope
                         VStack(alignment: .leading, spacing: 0) {
@@ -165,22 +195,10 @@ struct TeamsReadDetailView: View {
                             }
                             TeamsMessageRow(message: message, compact: compact, grouped: isGrouped(at: index), accountID: store.accountID,
                                             canEdit: store.canEditMessage(in: chat.id, messageID: message.id), canReact: store.canReact(in: chat.id, messageID: message.id),
-                                            mediaRevision: store.mediaRevision, mediaRefreshRevision: store.mediaRefreshRevision, loadImage: { try await store.imageData(for: $0, fullSize: $1) },
-                                            loadPhoto: { try await store.profilePhoto(for: $0) },
-                                            replyAuthor: { store.replyAuthor($0, in: chat.id) },
-                                            canJumpToMessage: { id in messages.contains(where: { $0.id == id }) || (store.connected && !id.isEmpty && id.utf8.count <= 32 && id.utf8.allSatisfy { (48...57).contains($0) }) },
-                                            jumpToMessage: { id in
-                                                noteTimelineIntent()
-                                                if messages.contains(where: { $0.id == id }) { jumpToMessage = .init(messageID: id, chatID: chat.id, accountScope: accountScope) }
-                                                else { showMessageContext = true; Task { guard showMessageContext, selectedChatID == chat.id, accountScope == store.accountScope else { return }; await store.openMessageContext(in: chat.id, targetID: id) } }
-                                            }, action: { action in
-                                if action == "reply" { store.composer.setReply(.init(messageID: message.id, preview: message.body.text, author: message.author.name), in: chat.id) }
-                                else if action == "edit" { openEdit(messageID: message.id, accountScope: accountScope) }
-                                else if action == "delete" { deletingAccount = self.accountScope; deletingMessage = message }
-                                else if action == "check-delete" { Task { await store.checkDeletion(in: chat.id, messageID: message.id, expectedScope: self.accountScope, expectedRevision: accountRevision) } }
-                                else if action == "dismiss-delete" { Task { await store.dismissRejectedDeletion(in: chat.id, messageID: message.id, expectedScope: self.accountScope, expectedRevision: accountRevision) } }
-                                else { Task { await store.messageAction(action, chatID: chat.id, messageID: message.id, accountScope: accountScope) } }
-                            }, loadFilePreview: loadFilePreview, filePreviewConnected: store.connected, deletionStage: store.deletionStage(in: chat.id, messageID: message.id), deletionMessage: store.deletionMessage(in: chat.id, messageID: message.id), canDelete: store.canDelete(in: chat.id, messageID: message.id))
+                                            mediaRevision: store.mediaRevision, mediaRefreshRevision: store.mediaRefreshRevision,
+                                            actions: rowActions(for: message, knownIDs: knownMessageIDs),
+                                            filePreviewConnected: store.connected, deletionStage: store.deletionStage(in: chat.id, messageID: message.id), deletionMessage: store.deletionMessage(in: chat.id, messageID: message.id), canDelete: store.canDelete(in: chat.id, messageID: message.id))
+                            .equatable()
                         }
                         .id(message.id)
                         .task(id: "\(accountRevision.uuidString):\(chat.id):\(message.id)") {

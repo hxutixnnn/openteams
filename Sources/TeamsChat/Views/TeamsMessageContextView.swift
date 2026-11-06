@@ -8,6 +8,26 @@ struct TeamsMessageContextView: View {
     var loadFilePreview: ((TeamsSharePointAttachment) async throws -> Data)? = nil
     @ViewState<String?> private var visibleMessageID = nil
 
+    private func contextActions(for message: TeamsRenderedMessage, knownIDs: Set<String>, chatID: String,
+                                accountScope: String, contextScope: UUID, proxy: ScrollViewProxy) -> TeamsMessageRowActions {
+        let actions = TeamsMessageRowActions()
+        actions.loadImage = { [store] image, fullSize in try await store.imageData(for: image, fullSize: fullSize) }
+        actions.loadPhoto = { [store] person in try await store.profilePhoto(for: person) }
+        actions.replyAuthor = { [store] reply in store.replyAuthor(reply, in: chatID) }
+        actions.canJumpToMessage = { id in
+            knownIDs.contains(id) || (store.connected && !id.isEmpty && id.utf8.count <= 32 && id.utf8.allSatisfy { (48...57).contains($0) })
+        }
+        actions.jumpToMessage = { id in
+            if knownIDs.contains(id) { proxy.scrollTo(id, anchor: .center) }
+            else { Task { guard contextScope == store.contextRevision, accountScope == store.accountScope else { return }; await store.openMessageContext(in: chatID, targetID: id) } }
+        }
+        actions.action = { action in
+            Task { await store.messageAction(action, chatID: chatID, messageID: message.id, accountScope: accountScope, contextScope: contextScope) }
+        }
+        actions.loadFilePreview = loadFilePreview
+        return actions
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -52,17 +72,10 @@ struct TeamsMessageContextView: View {
                                     TeamsMessageRow(message: message, compact: false, grouped: false, accountID: store.accountID,
                                                     canEdit: false, canReact: store.canReact(in: chatID, messageID: message.id),
                                                     mediaRevision: store.mediaRevision, mediaRefreshRevision: store.mediaRefreshRevision,
-                                                    loadImage: { try await store.imageData(for: $0, fullSize: $1) },
-                                                    loadPhoto: { try await store.profilePhoto(for: $0) },
-                                                    replyAuthor: { store.replyAuthor($0, in: chatID) },
-                                                    canJumpToMessage: { id in store.contextMessages.contains { $0.id == id } || (store.connected && !id.isEmpty && id.utf8.count <= 32 && id.utf8.allSatisfy { (48...57).contains($0) }) },
-                                                    jumpToMessage: { id in
-                                                        if store.contextMessages.contains(where: { $0.id == id }) { proxy.scrollTo(id, anchor: .center) }
-                                                        else { Task { guard contextScope == store.contextRevision, accountScope == store.accountScope else { return }; await store.openMessageContext(in: chatID, targetID: id) } }
-                                                    },
-                                                    action: { action in
-                                                        Task { await store.messageAction(action, chatID: chatID, messageID: message.id, accountScope: accountScope, contextScope: contextScope) }
-                                                    }, loadFilePreview: loadFilePreview, filePreviewConnected: store.connected,
+                                                    actions: contextActions(for: message, knownIDs: Set(store.contextMessages.map(\.id)),
+                                                                            chatID: chatID, accountScope: accountScope, contextScope: contextScope,
+                                                                            proxy: proxy),
+                                                    filePreviewConnected: store.connected,
                                                     filePreviewIdentity: contextScope, contextActionsOnly: true)
                                     if !message.isDeleted {
                                         HStack {

@@ -183,17 +183,23 @@ private struct RoundedInlineImageFixtureView: View {
             TeamsMessageRow(message: TeamsRenderedMessage(message, accountScope: "rounded-fixture", accountRevision: revision, chatID: "image"), compact: false, grouped: false,
                 accountID: "fixture-a", canEdit: false, canReact: false,
                 mediaRevision: revision, mediaRefreshRevision: revision,
-                loadImage: { image, fullSize in
+                actions: roundedImageActions(loadImage: { image, fullSize in
                     guard image.url == imageURL else { throw TeamsMediaError.unsafeURL }
                     try Task.checkCancellation()
                     if fullSize { fullSizeRequested = true }
                     return Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAZAAAABkCAIAAAAnqfEgAAABl0lEQVR4nO3YwQ3CMBAAwYCoDZpIBaGeVBCaSHc0wCMCS2iVmb+te63OvtyXbQIouP57AICjBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIOP2y+F9ncdNApzF4/n67qANC8gQLCBDsIBz/GENeZQCZ7CP+PK2YQEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAxm3URfs6j7oK4CMbFpAhWECGYAEZl/uy/XsGgENsWECGYAEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAhmABU8Ub1voLHfGLJMoAAAAASUVORK5CYII=")!
-                }, loadPhoto: { _ in throw TeamsMediaError.unavailable },
-                replyAuthor: { _ in "Alex Example" }, canJumpToMessage: { _ in false }, jumpToMessage: { _ in }, action: { _ in }, canDelete: false)
+                }), canDelete: false)
             Spacer()
         }
         .padding(20)
         .onChange(of: revision) { _, _ in fullSizeRequested = false }
+    }
+
+    private func roundedImageActions(loadImage: @escaping (TeamsInlineImage, Bool) async throws -> Data) -> TeamsMessageRowActions {
+        let actions = TeamsMessageRowActions()
+        actions.loadImage = loadImage
+        actions.replyAuthor = { _ in "Alex Example" }
+        return actions
     }
 }
 #endif
