@@ -20,6 +20,7 @@ struct ContentView: View {
             SidebarView(store: store, selection: Binding(get: { selectedID }, set: { selectedID = $0 ?? "" }), filter: $conversationFilter)
                 .navigationTitle("Chats")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+                .anchorPreference(key: TeamsSidebarBounds.self, value: .bounds) { $0 }
         } detail: {
             if let conversation = store.conversation(selectedID) {
                 TeamsConversationLayout(showInspector: $showInspector) {
@@ -51,6 +52,7 @@ struct ContentView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .modifier(TeamsSidebarDividerCover())
         .background(TeamsSurface.window)
         .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .focusedSceneValue(\.chatActions, ChatWindowActions(
