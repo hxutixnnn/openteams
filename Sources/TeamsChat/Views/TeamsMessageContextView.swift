@@ -105,9 +105,7 @@ struct TeamsMessageContextView: View {
                 }
             }
         }
-        .modifier(TeamsInsetPanel())
         .background(TeamsSurface.window)
-        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .frame(minWidth: 540, minHeight: 420)
     }
 }

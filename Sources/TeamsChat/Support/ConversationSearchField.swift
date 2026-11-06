@@ -14,19 +14,24 @@ struct ConversationSearchField: NSViewRepresentable {
     let focus: ConversationSearchFocus
     let accessibilityName: String
     var submit: () -> Void = {}
+    var placeholder = "Search this conversation"
+    var focusOnAppear = true
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeNSView(context: Context) -> SearchTextField {
         let field = SearchTextField()
-        field.placeholderString = "Search this conversation"
-        field.isBezeled = false
-        field.drawsBackground = false
+        field.placeholderString = placeholder
+        field.isBezeled = true
+        field.drawsBackground = true
+        field.sendsWholeSearchString = true
+        field.sendsSearchStringImmediately = false
         field.focusRingType = .exterior
         field.cell?.sendsActionOnEndEditing = false
         field.setAccessibilityLabel(accessibilityName)
         field.delegate = context.coordinator
         field.target = context.coordinator
         field.action = #selector(Coordinator.submit)
+        field.focusOnAppear = focusOnAppear
         field.focusOwner = focus
         focus.field = field
         return field
@@ -35,6 +40,7 @@ struct ConversationSearchField: NSViewRepresentable {
         context.coordinator.parent = self
         if field.stringValue != text { field.stringValue = text }
         if let old = field.focusOwner, old !== focus, old.field === field { old.field = nil }
+        field.focusOnAppear = focusOnAppear
         field.focusOwner = focus
         focus.field = field
     }
@@ -45,7 +51,7 @@ struct ConversationSearchField: NSViewRepresentable {
         field.target = nil
         field.action = nil
     }
-    final class Coordinator: NSObject, NSTextFieldDelegate {
+    @MainActor final class Coordinator: NSObject, NSSearchFieldDelegate {
         var parent: ConversationSearchField
         init(_ parent: ConversationSearchField) { self.parent = parent }
         func controlTextDidChange(_ notification: Notification) {
@@ -56,11 +62,12 @@ struct ConversationSearchField: NSViewRepresentable {
     }
 }
 
-final class SearchTextField: NSTextField {
+final class SearchTextField: NSSearchField {
+    var focusOnAppear = true
     weak var focusOwner: ConversationSearchFocus?
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard window != nil, let owner = focusOwner else { return }
+        guard focusOnAppear, window != nil, let owner = focusOwner else { return }
         DispatchQueue.main.async { [weak self, weak owner] in
             guard let self, let owner, self.window != nil, self.focusOwner === owner, owner.field === self else { return }
             owner.focus()

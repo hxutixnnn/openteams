@@ -36,6 +36,7 @@ struct TeamsUpdateStatus: Codable, Equatable {
     private(set) var message = "Check for updates to OpenTeams."
     private(set) var status: TeamsUpdateStatus?
     private(set) var logURL: URL?
+    private(set) var prerequisiteIssue: String? = "Checking build prerequisites…"
     private var job: URL?
     private var worker: Process?
     private let root: URL
@@ -44,7 +45,7 @@ struct TeamsUpdateStatus: Codable, Equatable {
     var revision: String { installedRevision }
     var busy: Bool { checking || status?.active == true }
     var canInstall: Bool {
-        !busy && available != nil && Bundle.main.bundleURL.path == "/Applications/OpenTeams.app"
+        !busy && prerequisiteIssue == nil && available != nil && Bundle.main.bundleURL.path == "/Applications/OpenTeams.app"
             && Bundle.main.url(forResource: "update_app", withExtension: "py") != nil
     }
 
@@ -57,6 +58,30 @@ struct TeamsUpdateStatus: Codable, Equatable {
             job = root.appending(path: name, directoryHint: .isDirectory)
             refreshStatus()
         }
+    }
+
+    func checkPrerequisites() async {
+        guard let script = Bundle.main.url(forResource: "check_build_environment", withExtension: "py") else {
+            prerequisiteIssue = "This build has no updater prerequisite checker. Install a packaged OpenTeams build."
+            return
+        }
+        prerequisiteIssue = await Task.detached {
+            let process = Process()
+            let output = Pipe()
+            process.executableURL = URL(filePath: "/usr/bin/python3")
+            process.arguments = [script.path]
+            process.standardOutput = output
+            process.standardError = output
+            do {
+                try process.run()
+                let data = output.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                guard process.terminationStatus != 0 else { return nil as String? }
+                return String(data: data, encoding: .utf8) ?? "Update the selected Apple developer tools to include macOS 27 SDK and Swift 6.4."
+            } catch {
+                return "Could not check build tools: " + error.localizedDescription
+            }
+        }.value
     }
 
     func check() async {

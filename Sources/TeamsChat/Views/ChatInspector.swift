@@ -68,9 +68,7 @@ struct ChatInspector: View {
     private var search: some View {
         VStack(alignment: .leading, spacing: 12) {
             ConversationSearchField(text: $query, focus: searchFocus, accessibilityName: "Search this conversation")
-                .padding(6)
-                .modifier(TeamsControlSurface())
-                .frame(height: 32)
+                .frame(height: 28)
             Text("Searches demo messages on this Mac.").font(.caption).foregroundStyle(.secondary)
             if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ContentUnavailableView("Find a message", systemImage: "text.magnifyingglass",

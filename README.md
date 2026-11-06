@@ -3,7 +3,7 @@
 A native macOS client for Microsoft Teams chats, written in Swift 6 with SwiftUI. No Electron, no browser-tab wrapper — a real macOS app that talks to the same Teams web services the web client uses.
 
 <p>
-  <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-black">
+  <img alt="macOS 27 or later" src="https://img.shields.io/badge/macOS-27%2B-black">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-orange">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Status: early preview" src="https://img.shields.io/badge/status-early%20preview-yellow">
@@ -86,8 +86,8 @@ Organization policies or changes to Microsoft sign-in can block the connection e
 
 ## Requirements
 
-- macOS 14 (Sonoma) or later
-- Swift 6 toolchain — Xcode 16 or the Xcode Command Line Tools
+- macOS 27 or later
+- macOS 27 SDK and Swift 6.4 or later — compatible Xcode or Command Line Tools
 - A Microsoft Teams work or school account (live use only; the Sample Workspace needs no account)
 
 ## Getting started
@@ -221,7 +221,7 @@ Only external dependency: [SwiftSoup](https://github.com/scinfu/SwiftSoup) `2.9.
 
 Choose **OpenTeams → Check for Updates…**, or **Settings → Updates**, to check the latest merged `main` revision. **Install Update…** asks before building, installing and restarting. The signed app must be installed at `/Applications/OpenTeams.app`. Checks are manual; OpenTeams does not download or install updates automatically.
 
-This updater is for locally signed installations. It requires Xcode Command Line Tools, internet access, and the existing local signing identity and pinned credential helper. It fetches the exact selected commit from this repository into a private update directory, builds and signs it on this Mac, verifies it, and uses the same guarded installer as a manual update. It never changes the development checkout. The app remains open during the build; installation stops it and restarts the installed copy. The previous app is retained under `/Applications/.OpenTeams-install.*/previous.app`; a failed final signature verification restores it. Updates retain the existing sign-in, helper and local chat data. An unsuccessful build leaves the installed app in place.
+This updater is for locally signed installations. It requires macOS 27, the macOS 27 SDK and Swift 6.4 or later (from compatible Command Line Tools or Xcode), internet access, and the existing local signing identity and pinned credential helper. It fetches the exact selected commit from this repository into a private update directory, builds and signs it on this Mac, verifies it, and uses the same guarded installer as a manual update. It never changes the development checkout. The app remains open during the build; installation stops it and restarts the installed copy. The previous app is retained under `/Applications/.OpenTeams-install.*/previous.app`; a failed final signature verification restores it. Updates retain the existing sign-in, helper and local chat data. An unsuccessful build leaves the installed app in place.
 
 The update window shows progress and failures and can reveal the log. Job state and source/build logs are retained in `~/Library/Application Support/TeamsChat/Updates`. Closing the update window or quitting the app does not cancel a running update. Only one update can install at a time. A failed or interrupted update can be retried with a new check. The build revision is embedded in `OpenTeamsSourceRevision`; this is the comparison used by the updater rather than the unchanged marketing version.
 

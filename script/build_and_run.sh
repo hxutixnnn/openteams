@@ -27,6 +27,7 @@ if [[ "$(sed -n 's/^identity=//p' "$HELPER_PIN/manifest" 2>/dev/null)" != "$SIGN
   echo "The pinned credential helper is missing or invalid; do not regenerate it automatically." >&2
   exit 1
 fi
+python3 "$ROOT_DIR/script/check_build_environment.py"
 swift build --jobs 4 --product "$APP_NAME"
 SOURCE_REVISION="$(git rev-parse HEAD)"
 [[ "$SOURCE_REVISION" =~ ^[a-f0-9]{40}$ ]]
@@ -42,6 +43,7 @@ cp -R "$HELPER_PIN/TeamsCredentialService.xpc" "$APP_CONTENTS/XPCServices/"
 "$ROOT_DIR/script/verify_credential_helper.sh" "$APP_CONTENTS/XPCServices/TeamsCredentialService.xpc"
 cp "$ROOT_DIR/assets/icon/OpenTeams.icns" "$APP_CONTENTS/Resources/OpenTeams.icns"
 cp "$ROOT_DIR/script/update_app.py" "$APP_CONTENTS/Resources/update_app.py"
+cp "$ROOT_DIR/script/check_build_environment.py" "$APP_CONTENTS/Resources/check_build_environment.py"
 cp "$BUILD_DIR/$APP_NAME" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 rm -rf "$APP_CONTENTS/Frameworks/MSAL.framework"
@@ -61,7 +63,7 @@ cat > "$APP_CONTENTS/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>OpenTeamsSourceRevision</key><string>$SOURCE_REVISION</string>
-  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>LSMinimumSystemVersion</key><string>27.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

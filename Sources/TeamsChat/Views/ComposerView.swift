@@ -16,8 +16,8 @@ struct ComposerView: View {
                     NativeComposer(text: $text, conversationID: conversationID, focusRequest: focusRequest,
                                    sendOnReturn: sendOnReturn, send: send)
                     if text.isEmpty {
-                        Text("Write a message…")
-                            .font(.system(size: 14)).foregroundStyle(.tertiary)
+                        Text("Message…")
+                            .font(.system(size: 14)).foregroundStyle(.secondary)
                             .padding(.leading, 12).padding(.top, 11)
                             .allowsHitTesting(false)
                     }

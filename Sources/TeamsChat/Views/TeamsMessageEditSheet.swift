@@ -26,7 +26,7 @@ struct TeamsMessageEditSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Edit message").font(.headline)
             if let status { Text(status).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
-            HStack(spacing: 12) {
+            ReactionFlowLayout(spacing: 8) {
                 format("Bold", "bold", .bold)
                 format("Italic", "italic", .italic)
                 format("Underline", "underline", .underline)
@@ -70,9 +70,7 @@ struct TeamsMessageEditSheet: View {
             }
         }
         .padding(20)
-        .modifier(TeamsInsetPanel())
         .background(TeamsSurface.window)
-        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .frame(minWidth: 540, minHeight: 320)
         .alert("Add link", isPresented: $showLink) {
             TextField("https://example.com", text: $linkText)
@@ -86,7 +84,7 @@ struct TeamsMessageEditSheet: View {
     }
 
     private func format(_ label: String, _ symbol: String, _ action: TeamsComposerCommand.Action) -> some View {
-        Button { command = .init(action: action) } label: { Image(systemName: symbol) }
+        Button { command = .init(action: action) } label: { Image(systemName: symbol).frame(width: 28, height: 28) }
             .help(label).accessibilityLabel(label)
     }
 }

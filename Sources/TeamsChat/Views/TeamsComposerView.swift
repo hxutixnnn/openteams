@@ -58,7 +58,7 @@ struct TeamsComposerView: View {
                 }
                 VStack(spacing: 0) {
                     if showFormatting {
-                        HStack(spacing: 8) {
+                        ReactionFlowLayout(spacing: 8) {
                             formatButton("Bold", systemImage: "bold", action: .bold)
                             formatButton("Italic", systemImage: "italic", action: .italic)
                             formatButton("Underline", systemImage: "underline", action: .underline)
@@ -77,7 +77,6 @@ struct TeamsComposerView: View {
                                     }
                                 }
                             }.help("Mention a conversation participant")
-                            Spacer()
                         }.buttonStyle(.borderless).padding(.horizontal, 12).padding(.top, 10)
                     }
                     if let reply = composer.replies[chat.id] {
@@ -100,7 +99,7 @@ struct TeamsComposerView: View {
                                           focusRequest: focusRequest, command: formatCommand, sendOnReturn: sendOnReturn, send: send,
                                           members: chat.members ?? [], accountID: store.accountID, mentionPicker: mentionPicker, editorReady: editorReady)
                         if draft.wrappedValue.isEmpty {
-                            Text("Write a message…")
+                            Text("Message…")
                                 .font(.system(size: 14)).foregroundStyle(.secondary)
                                 .padding(.leading, 12).padding(.top, 11).allowsHitTesting(false)
                         }
@@ -175,7 +174,7 @@ struct TeamsComposerView: View {
     }
 
     private func formatButton(_ label: String, systemImage: String, action: TeamsComposerCommand.Action) -> some View {
-        Button { formatCommand = .init(action: action) } label: { Image(systemName: systemImage) }
+        Button { formatCommand = .init(action: action) } label: { Image(systemName: systemImage).frame(width: 28, height: 28) }
             .help(label).accessibilityLabel(label)
     }
 

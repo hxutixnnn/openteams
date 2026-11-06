@@ -28,10 +28,8 @@ struct TeamsSignInView: View {
             Text("Sign-in is stored securely in Keychain. Downloaded chats are saved on this Mac.")
                 .font(.caption).foregroundStyle(.secondary).padding(12)
         }
-        .modifier(TeamsInsetPanel())
         .background(TeamsSurface.window)
-        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
-        .frame(width: 940, height: 720)
+        .frame(minWidth: 600, idealWidth: 940, maxWidth: .infinity, minHeight: 420, idealHeight: 720, maxHeight: .infinity)
         .task {
             while !Task.isCancelled {
                 await connection.checkWebSession()

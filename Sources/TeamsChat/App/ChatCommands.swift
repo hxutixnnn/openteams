@@ -5,6 +5,8 @@ struct ChatWindowActions {
     var details: () -> Void
     var compose: () -> Void
     var canCompose = true
+    var newChat: (() -> Void)? = nil
+    var canInspect = true
 }
 
 private struct ChatActionsKey: FocusedValueKey { typealias Value = ChatWindowActions }
@@ -24,12 +26,15 @@ struct ChatCommands: Commands {
             Button("Check for Updates…") { openWindow(id: "updates") }
         }
         CommandMenu("Conversation") {
+            Button("New Chat") { actions?.newChat?() }
+                .disabled(actions?.newChat == nil)
+            Divider()
             Button("Find in Conversation") { actions?.search() }
                 .keyboardShortcut("f")
-                .disabled(actions == nil)
+                .disabled(actions?.canInspect != true)
             Button("Conversation Details") { actions?.details() }
                 .keyboardShortcut("i", modifiers: [.command, .option])
-                .disabled(actions == nil)
+                .disabled(actions?.canInspect != true)
             Button("Focus Composer") { actions?.compose() }
                 .keyboardShortcut("l")
                 .disabled(actions?.canCompose != true)

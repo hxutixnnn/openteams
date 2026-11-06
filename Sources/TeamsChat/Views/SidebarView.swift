@@ -4,6 +4,7 @@ import TeamsCore
 struct SidebarView: View {
     var store: FixtureChatStore
     @Binding var selection: String?
+    @ViewState private var filterFocus = ConversationSearchFocus()
     @Binding var filter: String
 
     private var conversations: [Conversation] {
@@ -22,24 +23,11 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .background(TeamsSurface.window)
         .safeAreaInset(edge: .top) {
-            HStack(spacing: 7) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("", text: $filter, prompt: Text("Find a conversation"))
-                    .textFieldStyle(.plain).labelsHidden()
-                    .accessibilityLabel("Find a conversation")
-                    .onExitCommand { filter = "" }
-                if !filter.isEmpty {
-                    Button { filter = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                        .accessibilityLabel("Clear conversation search")
-                }
-            }
-            .padding(8)
-            .modifier(TeamsControlSurface())
-            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 6)
+            ConversationSearchField(text: $filter, focus: filterFocus, accessibilityName: "Find a conversation",
+                                    placeholder: "Filter conversations", focusOnAppear: false)
+                .frame(height: 28)
+                .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 6)
         }
         .overlay {
             if conversations.isEmpty {
@@ -58,7 +46,6 @@ struct SidebarView: View {
                     .help("Demo conversations, stored only on this Mac")
             }
             .padding(14)
-            .background(TeamsSurface.window)
         }
     }
 

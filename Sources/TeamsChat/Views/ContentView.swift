@@ -20,7 +20,6 @@ struct ContentView: View {
             SidebarView(store: store, selection: Binding(get: { selectedID }, set: { selectedID = $0 ?? "" }), filter: $conversationFilter)
                 .navigationTitle("Chats")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-                .anchorPreference(key: TeamsSidebarBounds.self, value: .bounds) { $0 }
         } detail: {
             if let conversation = store.conversation(selectedID) {
                 TeamsConversationLayout(showInspector: $showInspector) {
@@ -31,6 +30,7 @@ struct ContentView: View {
                                   query: $messageQuery, jumpToMessage: $jumpToMessage, searchFocus: searchFocus)
                 }
                 .navigationTitle(conversation.title)
+                .navigationSubtitle("Sample Workspace · Fictional conversations · Local messages")
                 .toolbar {
                     ToolbarItemGroup(placement: .primaryAction) {
                         Button(action: openSearch) { Label("Find in Conversation", systemImage: "magnifyingglass") }
@@ -48,17 +48,16 @@ struct ContentView: View {
                 ContentUnavailableView("Choose a conversation", systemImage: "bubble.left.and.bubble.right",
                                        description: Text("Your conversations are in the sidebar."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .modifier(TeamsInsetPanel())
+
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .modifier(TeamsSidebarDividerCover())
         .background(TeamsSurface.window)
-        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .focusedSceneValue(\.chatActions, ChatWindowActions(
             search: openSearch,
             details: { inspectorTab = .people; showInspector.toggle() },
-            compose: { focusComposer = UUID() }
+            compose: { focusComposer = UUID() }, canCompose: store.conversation(selectedID) != nil,
+            canInspect: store.conversation(selectedID) != nil
         ))
         .onAppear {
             if showcaseDetails { showInspector = true }

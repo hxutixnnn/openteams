@@ -43,7 +43,7 @@ with (contents / "Info.plist").open("wb") as stream:
         "CFBundleName": arguments.name,
         "CFBundlePackageType": "APPL",
         "CFBundleVersion": "1",
-        "LSMinimumSystemVersion": "14.0",
+        "LSMinimumSystemVersion": "27.0",
         "NSPrincipalClass": "NSApplication",
         "NSHighResolutionCapable": True,
         "LSUIElement": True,

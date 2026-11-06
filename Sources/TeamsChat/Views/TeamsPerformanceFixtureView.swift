@@ -138,8 +138,8 @@ private struct PerformanceFixtureContent: View {
                 .font(.caption).padding(8)
             }
             HStack {
-                Toggle("Sample Workspace", isOn: $sampleWorkspace).toggleStyle(TeamsPillToggleStyle())
-                Toggle("Inline image", isOn: $inlineImage).toggleStyle(TeamsPillToggleStyle())
+                Toggle("Sample Workspace", isOn: $sampleWorkspace).toggleStyle(.button)
+                Toggle("Inline image", isOn: $inlineImage).toggleStyle(.button)
                 Text("Appearance")
                 ForEach(["System", "Light", "Dark"], id: \.self) { selection in
                     Button(selection) { appearance.selection = selection }
@@ -164,7 +164,6 @@ private struct PerformanceFixtureContent: View {
                                      fixtureStartupConversation: TeamsPerformanceFixtureConfiguration.startupConversation)
             }
         }
-        .tint(ChatTheme.accent)
         .background(TeamsSurface.window)
         .frame(minWidth: 820, minHeight: 580)
         .task { await controller.connect("fixture-a") }
@@ -194,7 +193,6 @@ private struct RoundedInlineImageFixtureView: View {
             Spacer()
         }
         .padding(20)
-        .modifier(TeamsInsetPanel())
         .onChange(of: revision) { _, _ in fullSizeRequested = false }
     }
 }

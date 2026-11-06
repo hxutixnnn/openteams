@@ -1,39 +1,17 @@
 import SwiftUI
 
 enum TeamsSurface {
-    static let panelRadius: CGFloat = 18
-    static let nestedRadius: CGFloat = 14
-    static let cardRadius: CGFloat = 12
+    static let nestedRadius: CGFloat = 8
+    static let cardRadius: CGFloat = 8
     static let controlRadius: CGFloat = 8
     static let inset: CGFloat = 10
     static let borderWidth: CGFloat = 1
 
-    static var window: Color { neutral(light: 0.94, dark: 0.12) }
-    static var border: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            NSColor.labelColor.withAlphaComponent(appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? 0.12 : 0.08)
-        })
-    }
-    static var panel: Color { neutral(light: 0.995, dark: 0.16) }
-    static var nested: Color { Color.primary.opacity(0.035) }
+    static var window: Color { Color(nsColor: .windowBackgroundColor) }
+    static var border: Color { Color(nsColor: .separatorColor) }
+    static var panel: Color { Color(nsColor: .textBackgroundColor) }
+    static var nested: Color { Color(nsColor: .controlBackgroundColor) }
     static var input: Color { Color(nsColor: .textBackgroundColor) }
-
-    private static func neutral(light: CGFloat, dark: CGFloat) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            NSColor(white: appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light, alpha: 1)
-        })
-    }
-}
-
-struct TeamsInsetPanel: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .background(TeamsSurface.panel)
-            .clipShape(RoundedRectangle(cornerRadius: TeamsSurface.panelRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: TeamsSurface.panelRadius, style: .continuous)
-                .strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth).allowsHitTesting(false))
-            .padding(TeamsSurface.inset)
-    }
 }
 
 struct TeamsControlSurface: ViewModifier {
@@ -46,15 +24,10 @@ struct TeamsControlSurface: ViewModifier {
 }
 
 struct TeamsSectionPanel: ViewModifier {
-    var radius: CGFloat = TeamsSurface.nestedRadius
-
     func body(content: Content) -> some View {
         content
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth).allowsHitTesting(false))
     }
 }
 
@@ -70,7 +43,8 @@ struct TeamsConversationLayout<Timeline: View, Inspector: View>: View {
             ZStack(alignment: .trailing) {
                 timeline()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.trailing, showInspector && besideTimeline ? inspectorWidth + TeamsSurface.inset : 0)
+                    .background(TeamsSurface.panel)
+                    .padding(.trailing, showInspector && besideTimeline ? inspectorWidth : 0)
                 if showInspector {
                     VStack(spacing: 0) {
                         HStack {
@@ -86,56 +60,10 @@ struct TeamsConversationLayout<Timeline: View, Inspector: View>: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(width: inspectorWidth)
-                    .background(TeamsSurface.panel)
-                    .clipShape(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous)
-                        .strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth).allowsHitTesting(false))
-                    .padding(TeamsSurface.inset)
+                    .glassEffect(.regular, in: Rectangle())
+                    .overlay(alignment: .leading) { Divider().allowsHitTesting(false) }
                 }
             }
-        }
-        .modifier(TeamsInsetPanel())
-    }
-}
-
-struct TeamsPillToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Button { configuration.isOn.toggle() } label: {
-            configuration.label
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, 11).padding(.vertical, 5)
-                .background(configuration.isOn ? Color.primary.opacity(0.12) : TeamsSurface.nested, in: Capsule())
-                .overlay(Capsule().strokeBorder(configuration.isOn ? Color.primary.opacity(0.22) : TeamsSurface.border, lineWidth: TeamsSurface.borderWidth))
-        }
-        .buttonStyle(.plain)
-        .accessibilityValue(configuration.isOn ? "On" : "Off")
-        .accessibilityAddTraits(configuration.isOn ? [.isSelected] : [])
-    }
-}
-
-struct TeamsSidebarBounds: PreferenceKey {
-    static var defaultValue: Anchor<CGRect>? { nil }
-
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
-        value = nextValue() ?? value
-    }
-}
-
-struct TeamsSidebarDividerCover: ViewModifier {
-    func body(content: Content) -> some View {
-        content.overlayPreferenceValue(TeamsSidebarBounds.self) { anchor in
-            GeometryReader { geometry in
-                if let anchor {
-                    let sidebar = geometry[anchor]
-                    Rectangle()
-                        .fill(TeamsSurface.window)
-                        .frame(width: 2, height: sidebar.height)
-                        .position(x: sidebar.maxX, y: sidebar.midY)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
-            .allowsHitTesting(false)
         }
     }
 }

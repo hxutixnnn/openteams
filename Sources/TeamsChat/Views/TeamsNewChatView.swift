@@ -8,6 +8,7 @@ struct TeamsNewChatView: View {
     let ownsPresentation: () -> Bool
     let connect: () -> Void
     let created: (String) -> Void
+    @FocusState private var searchFocused: Bool
     @Environment(\.dismiss) private var dismiss
     @ViewState<String> private var query = ""
     @ViewState<String> private var title = ""
@@ -23,8 +24,10 @@ struct TeamsNewChatView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("New chat").font(.headline)
+            ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
             HStack {
-                TextField("Find people", text: $query).textFieldStyle(.plain).padding(7).modifier(TeamsControlSurface()).onSubmit(search)
+                TextField("Find people", text: $query).textFieldStyle(.plain).padding(7).modifier(TeamsControlSurface()).onSubmit(search).focused($searchFocused)
                 Button("Search", action: search).disabled(busy || !store.connected || query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             if !selected.isEmpty {
@@ -44,7 +47,7 @@ struct TeamsNewChatView: View {
             .listStyle(.plain).scrollContentBackground(.hidden)
             .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous).strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth))
-            .frame(minHeight: 170)
+            .frame(height: 170)
             .overlay {
                 if results.isEmpty && !busy {
                     VStack(spacing: 6) {
@@ -103,6 +106,8 @@ struct TeamsNewChatView: View {
                     }.disabled(store.isCreatingChat || reviewChanged)
                 }
             }
+            }
+            }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -110,10 +115,9 @@ struct TeamsNewChatView: View {
                     .disabled(busy || !store.connected || selected.isEmpty || outcomeUnknown || store.creationNeedsReview)
             }
         }.padding(20)
-        .modifier(TeamsInsetPanel())
         .background(TeamsSurface.window)
-        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius)).frame(width: 480, height: 420)
-            .onAppear { presentedReview = store.creationReview; reviewWasPresent = store.creationReview != nil || store.creationNeedsReview }
+        .frame(minWidth: 480, idealWidth: 480, minHeight: 420, idealHeight: 500)
+            .onAppear { searchFocused = true; presentedReview = store.creationReview; reviewWasPresent = store.creationReview != nil || store.creationNeedsReview }
     }
 
     private var reviewChanged: Bool {
