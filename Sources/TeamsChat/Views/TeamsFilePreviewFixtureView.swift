@@ -20,10 +20,8 @@ struct TeamsFilePreviewFixtureView: View {
             Text("Attachment preview fixture").font(.title2)
             Button("Disconnect fixture") { connected = false }
             TeamsMessageRow(message: sample, compact: false, grouped: false, accountID: "account", canEdit: false, canReact: false,
-                            mediaRevision: epoch, mediaRefreshRevision: epoch, loadImage: { _, _ in throw TeamsMediaError.unavailable },
-                            loadPhoto: { _ in throw TeamsMediaError.unavailable }, replyAuthor: { _ in "Fixture" },
-                            canJumpToMessage: { _ in false }, jumpToMessage: { _ in }, action: { _ in },
-                            loadFilePreview: { _ in
+                            mediaRevision: epoch, mediaRefreshRevision: epoch,
+                            actions: previewFixtureActions(loadPreview: { _ in
                                 if ProcessInfo.processInfo.arguments.contains("--file-preview-failure-fixture") { throw TeamsMediaError.unavailable }
                                 if ProcessInfo.processInfo.arguments.contains("--file-preview-disconnect-fixture") {
                                     connected = false
@@ -38,10 +36,19 @@ struct TeamsFilePreviewFixtureView: View {
                                 ("Sample PDF preview" as NSString).draw(at: NSPoint(x: 28, y: 350), withAttributes: [.font: NSFont.boldSystemFont(ofSize: 24), .foregroundColor: NSColor.black])
                                 image.unlockFocus()
                                 return image.tiffRepresentation!
-                            }, filePreviewConnected: connected)
+                            }), filePreviewConnected: connected)
             Spacer()
         }.padding(24).frame(minWidth: 700, minHeight: 500)
     }
+    private func previewFixtureActions(loadPreview: @escaping (TeamsSharePointAttachment) async throws -> Data) -> TeamsMessageRowActions {
+        let actions = TeamsMessageRowActions()
+        actions.loadImage = { _, _ in throw TeamsMediaError.unavailable }
+        actions.loadPhoto = { _ in throw TeamsMediaError.unavailable }
+        actions.replyAuthor = { _ in "Fixture" }
+        actions.loadFilePreview = loadPreview
+        return actions
+    }
+
     private func makeSamplePDF() -> Data {
         let bytes = NSMutableData()
         let consumer = CGDataConsumer(data: bytes)!

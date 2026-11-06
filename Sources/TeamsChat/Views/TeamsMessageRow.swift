@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import TeamsCore
 
-struct TeamsMessageRow: View {
+struct TeamsMessageRow: View, Equatable {
     @Environment(\.colorScheme) private var colorScheme
     let message: TeamsRenderedMessage
     let compact: Bool
@@ -12,19 +12,23 @@ struct TeamsMessageRow: View {
     let canReact: Bool
     let mediaRevision: UUID
     let mediaRefreshRevision: UUID
-    let loadImage: (TeamsInlineImage, Bool) async throws -> Data
-    let loadPhoto: (String) async throws -> Data
-    let replyAuthor: (TeamsReplyPreview) -> String
-    let canJumpToMessage: (String) -> Bool
-    let jumpToMessage: (String) -> Void
-    let action: (String) -> Void
-    var loadFilePreview: ((TeamsSharePointAttachment) async throws -> Data)? = nil
+    let actions: TeamsMessageRowActions
     var filePreviewConnected = true
     var filePreviewIdentity: UUID? = nil
     var contextActionsOnly = false
     var deletionStage: TeamsPendingDeletion.Stage? = nil
     var deletionMessage: String? = nil
     var canDelete = true
+
+    nonisolated static func == (lhs: TeamsMessageRow, rhs: TeamsMessageRow) -> Bool {
+        lhs.message == rhs.message && lhs.compact == rhs.compact && lhs.grouped == rhs.grouped
+            && lhs.accountID == rhs.accountID && lhs.canEdit == rhs.canEdit && lhs.canReact == rhs.canReact
+            && lhs.mediaRevision == rhs.mediaRevision && lhs.mediaRefreshRevision == rhs.mediaRefreshRevision
+            && lhs.actions === rhs.actions && lhs.filePreviewConnected == rhs.filePreviewConnected
+            && lhs.filePreviewIdentity == rhs.filePreviewIdentity && lhs.contextActionsOnly == rhs.contextActionsOnly
+            && lhs.deletionStage == rhs.deletionStage && lhs.deletionMessage == rhs.deletionMessage
+            && lhs.canDelete == rhs.canDelete
+    }
     @FocusState private var actionsFocused: Bool
     @ViewState<Bool> private var isHovered = false
     @ViewState<Bool> private var showReactionPicker = false
@@ -43,10 +47,13 @@ struct TeamsMessageRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        #if DEBUG
+        TeamsBenchmarkCounters.noteRowBody(message.id)
+        #endif
+        return HStack(alignment: .top, spacing: 12) {
             Group {
                 if grouped { Color.clear.accessibilityHidden(true) }
-                else { PersonAvatar(person: message.author, size: compact ? 28 : 32, revision: mediaRevision, refreshRevision: mediaRefreshRevision, loadPhoto: loadPhoto) }
+                else { PersonAvatar(person: message.author, size: compact ? 28 : 32, revision: mediaRevision, refreshRevision: mediaRefreshRevision, loadPhoto: actions.loadPhoto) }
             }
             .frame(width: compact ? 28 : 32, height: grouped ? 1 : (compact ? 28 : 32))
             VStack(alignment: .leading, spacing: 4) {
@@ -61,8 +68,8 @@ struct TeamsMessageRow: View {
                 if let deletionStage {
                     HStack {
                         Text(deletionMessage ?? (deletionStage == .accepted ? "Deletion accepted; check status." : (deletionStage == .rejected ? "Deletion was rejected." : "Deletion may have succeeded; check status.")))
-                        if deletionStage == .rejected { Button("Dismiss") { action("dismiss-delete") } }
-                        else { Button("Check status") { action("check-delete") } }
+                        if deletionStage == .rejected { Button("Dismiss") { actions.action("dismiss-delete") } }
+                        else { Button("Check status") { actions.action("check-delete") } }
                     }.font(.caption).foregroundStyle(.secondary).buttonStyle(.link)
                 }
                 if message.isDeleted {
@@ -93,7 +100,7 @@ struct TeamsMessageRow: View {
                                 let selected = mine(reaction.key)
                                 let symbol = TeamsReactionPresentation.symbol(for: reaction.key)
                                 let name = TeamsReactionPresentation.name(for: reaction.key)
-                                Button { action(selected ? "remove:" + reaction.key : reaction.key) } label: {
+                                Button { actions.action(selected ? "remove:" + reaction.key : reaction.key) } label: {
                                     Text("\(symbol == "✦" ? "✦ " + String(name.prefix(16)) : symbol) \(reaction.userIDs.count)")
                                         .font(.caption).padding(.horizontal, 7).padding(.vertical, 3)
                                         .background(selected ? ChatTheme.accent.opacity(0.14) : Color.primary.opacity(0.05), in: Capsule())
@@ -104,7 +111,7 @@ struct TeamsMessageRow: View {
                             }
                             Menu {
                                 ForEach(quickReactions, id: \.0) { key, symbol, label in
-                                    Button { action(mine(key) ? "remove:" + key : key) } label: {
+                                    Button { actions.action(mine(key) ? "remove:" + key : key) } label: {
                                         Text("\(symbol) \(label)\(mine(key) ? " ✓" : "")")
                                     }
                                 }
@@ -116,13 +123,13 @@ struct TeamsMessageRow: View {
                     ForEach(message.files) { file in
                         VStack(alignment: .leading, spacing: 6) {
                             if let preview = file.preview {
-                                TeamsInlineImageView(image: preview, revision: mediaRevision, refreshRevision: mediaRefreshRevision, load: loadImage)
+                                TeamsInlineImageView(image: preview, revision: mediaRevision, refreshRevision: mediaRefreshRevision, load: actions.loadImage)
                             }
                             Link(destination: file.url) {
                                 Label(file.title, systemImage: "doc.fill")
                                     .font(.callout).lineLimit(2)
                             }
-                            if file.sharePoint?.supportsPreview == true, loadFilePreview != nil {
+                            if file.sharePoint?.supportsPreview == true, actions.loadFilePreview != nil {
                                 Button("Preview") { previewFile = file }.buttonStyle(.link)
                                     .disabled(!filePreviewConnected)
                                     .accessibilityLabel("Preview \(file.title)")
@@ -141,7 +148,12 @@ struct TeamsMessageRow: View {
         .accessibilityLabel("\(isMe ? "You" : message.author.name), \(message.createdAt.formatted(date: .omitted, time: .shortened))\(message.isEdited ? ", edited" : "")")
         .padding(.vertical, grouped ? 4 : (compact ? 6 : 8))
         .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
+        .onHover { hovered in
+            #if DEBUG
+            TeamsBenchmarkCounters.hoverChanges += 1
+            #endif
+            isHovered = hovered
+        }
         .focusable()
         .focused($actionsFocused)
         .overlay(alignment: .topLeading) {
@@ -161,23 +173,23 @@ struct TeamsMessageRow: View {
                             .popover(isPresented: $showReactionPicker, arrowEdge: .top) {
                                 HStack(spacing: 4) {
                                     ForEach(quickReactions, id: \.0) { key, symbol, label in
-                                        Button { showReactionPicker = false; action(mine(key) ? "remove:" + key : key) } label: { Text(symbol) }
+                                        Button { showReactionPicker = false; actions.action(mine(key) ? "remove:" + key : key) } label: { Text(symbol) }
                                             .buttonStyle(.borderless).help(label).accessibilityLabel(label)
                                     }
                                 }.padding(8)
                             }
                     }
-                    Button { action("reply") } label: { Image(systemName: "arrowshape.turn.up.left") }
+                    Button { actions.action("reply") } label: { Image(systemName: "arrowshape.turn.up.left") }
                         .help("Reply").accessibilityLabel("Reply to message")
                     Menu {
                         Button("Copy Message") {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(message.body.text, forType: .string)
                         }
-                        Button("Mark Unread") { action("unread") }
+                        Button("Mark Unread") { actions.action("unread") }
                         if isMe {
-                            if canEdit { Button("Edit Message") { action("edit") } }
-                            Button("Delete Message", role: .destructive) { action("delete") }.disabled(!canDelete)
+                            if canEdit { Button("Edit Message") { actions.action("edit") } }
+                            Button("Delete Message", role: .destructive) { actions.action("delete") }.disabled(!canDelete)
                         }
                     } label: { Image(systemName: "ellipsis") }
                         .help("More message options").accessibilityLabel("More message options")
@@ -196,21 +208,21 @@ struct TeamsMessageRow: View {
                 }
             }
             if !contextActionsOnly && !message.isDeleted {
-                Button("Reply") { action("reply") }
+                Button("Reply") { actions.action("reply") }
                 Menu("React") {
                     ForEach(quickReactions, id: \.0) { key, symbol, label in
-                        Button("\(symbol) \(mine(key) ? "Remove " : "")\(label)") { action(mine(key) ? "remove:" + key : key) }
+                        Button("\(symbol) \(mine(key) ? "Remove " : "")\(label)") { actions.action(mine(key) ? "remove:" + key : key) }
                     }
                 }.disabled(!canReact)
-                Button("Mark Unread") { action("unread") }
+                Button("Mark Unread") { actions.action("unread") }
                 if isMe {
-                    if canEdit { Button("Edit Message") { action("edit") } }
-                    Button("Delete Message", role: .destructive) { action("delete") }.disabled(!canDelete)
+                    if canEdit { Button("Edit Message") { actions.action("edit") } }
+                    Button("Delete Message", role: .destructive) { actions.action("delete") }.disabled(!canDelete)
                 }
             }
         }
         .sheet(item: $previewFile) { file in
-            if let attachment = file.sharePoint, let loadFilePreview {
+            if let attachment = file.sharePoint, let loadFilePreview = actions.loadFilePreview {
                 TeamsFilePreviewSheet(file: file, attachment: attachment, load: loadFilePreview)
             }
         }
@@ -225,7 +237,7 @@ struct TeamsMessageRow: View {
             RoundedRectangle(cornerRadius: 2, style: .continuous).fill(ChatTheme.accent.opacity(0.6)).frame(width: 3)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(replyAuthor(reply)).font(.caption.weight(.semibold)).lineLimit(1)
+                    Text(actions.replyAuthor(reply)).font(.caption.weight(.semibold)).lineLimit(1)
                     if let date = reply.date { Text(date, format: .dateTime.month(.abbreviated).day().hour().minute()).font(.caption2) }
                     Spacer(minLength: 4)
                     Button {
@@ -233,8 +245,8 @@ struct TeamsMessageRow: View {
                     } label: { Image(systemName: expanded ? "chevron.up" : "chevron.down") }
                         .help(expanded ? "Collapse quote" : "Expand quote")
                         .accessibilityLabel(expanded ? "Collapse quote" : "Expand quote")
-                    if let id = reply.messageID, canJumpToMessage(id) {
-                        Button { jumpToMessage(id) } label: { Image(systemName: "arrow.up.left") }
+                    if let id = reply.messageID, actions.canJumpToMessage(id) {
+                        Button { actions.jumpToMessage(id) } label: { Image(systemName: "arrow.up.left") }
                             .help("Show original message").accessibilityLabel("Show original message")
                     }
                 }.foregroundStyle(.secondary)
@@ -273,7 +285,7 @@ struct TeamsMessageRow: View {
                 .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
         case .image:
             if let image = block.image {
-                TeamsInlineImageView(image: image, revision: mediaRevision, refreshRevision: mediaRefreshRevision, load: loadImage)
+                TeamsInlineImageView(image: image, revision: mediaRevision, refreshRevision: mediaRefreshRevision, load: actions.loadImage)
             }
         }
     }
@@ -286,6 +298,9 @@ struct TeamsMessageRow: View {
     }
 
     private func attributed(_ runs: [TeamsTextRun]) -> AttributedString {
+        #if DEBUG
+        TeamsBenchmarkCounters.rowText += 1
+        #endif
         var result = AttributedString()
         for run in runs {
             var value = AttributedString(run.text)
