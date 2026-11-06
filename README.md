@@ -269,3 +269,9 @@ Contributions are welcome — issues, bug reports, and pull requests.
 [MIT](LICENSE) © 2026 Nghia Nguyen
 
 Microsoft, Microsoft Teams, and related marks are trademarks of Microsoft Corporation. This project is an independent, unofficial client and is not affiliated with or endorsed by Microsoft.
+
+### Sidebar layout
+
+Use the sidebar button (Control-Command-S) to hide or restore the sidebar. The adjacent Sidebar Layout menu offers Docked, Hidden, and Overlay; Option-Command-S opens Overlay directly. Docked uses a 260-point column when the content area is at least 980 points wide and collapses below that width. Widening the window restores Docked; an explicitly Hidden sidebar stays hidden.
+
+When hidden, pause at the left edge to reveal the sidebar without resizing the conversation. Move into it to keep it open; moving away closes the temporary overlay after a short delay, unless keyboard focus remains inside. Escape or clicking outside dismisses an overlay. Layout changes preserve the conversation and editor views.

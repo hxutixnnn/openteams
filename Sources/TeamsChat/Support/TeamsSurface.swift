@@ -112,30 +112,3 @@ struct TeamsPillToggleStyle: ToggleStyle {
         .accessibilityAddTraits(configuration.isOn ? [.isSelected] : [])
     }
 }
-
-struct TeamsSidebarBounds: PreferenceKey {
-    static var defaultValue: Anchor<CGRect>? { nil }
-
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
-        value = nextValue() ?? value
-    }
-}
-
-struct TeamsSidebarDividerCover: ViewModifier {
-    func body(content: Content) -> some View {
-        content.overlayPreferenceValue(TeamsSidebarBounds.self) { anchor in
-            GeometryReader { geometry in
-                if let anchor {
-                    let sidebar = geometry[anchor]
-                    Rectangle()
-                        .fill(TeamsSurface.window)
-                        .frame(width: 2, height: sidebar.height)
-                        .position(x: sidebar.maxX, y: sidebar.midY)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
-            .allowsHitTesting(false)
-        }
-    }
-}

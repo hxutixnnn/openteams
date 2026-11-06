@@ -26,7 +26,6 @@ struct TeamsReadContentView: View {
     @ViewState<UUID> private var focusRequest = UUID()
     @ViewState<ConversationSearchFocus> private var searchFocus = ConversationSearchFocus()
     @ViewState<NewChatPresentation?> private var newChatPresentation = nil
-    @ViewState<NavigationSplitViewVisibility> private var columnVisibility = .all
     @ViewState<UUID> private var windowID = UUID()
     @ViewState<String?> private var loadedConversationKey = nil
 
@@ -39,14 +38,11 @@ struct TeamsReadContentView: View {
     #endif
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        TeamsSidebarLayout {
             TeamsReadSidebar(store: store,
                              selection: Binding(get: { selectedID }, set: { selectedID = $0 ?? "" }),
                              filter: $conversationFilter, connect: connect,
                              newChat: { newChatPresentation = .init(account: store.accountScope, revision: store.accountRevision) })
-                .navigationTitle("Chats")
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-                .anchorPreference(key: TeamsSidebarBounds.self, value: .bounds) { $0 }
         } detail: {
             Group {
                 if selectedChat != nil { detail }
@@ -55,8 +51,6 @@ struct TeamsReadContentView: View {
             .toolbar { toolbar }
             .toolbarBackground(.hidden, for: .windowToolbar)
         }
-        .navigationSplitViewStyle(.balanced)
-        .modifier(TeamsSidebarDividerCover())
         .background(TeamsSurface.window)
         .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .background(TeamsWindowProbe { window in

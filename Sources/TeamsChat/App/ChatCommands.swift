@@ -34,6 +34,5 @@ struct ChatCommands: Commands {
                 .keyboardShortcut("l")
                 .disabled(actions?.canCompose != true)
         }
-        SidebarCommands()
     }
 }

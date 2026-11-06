@@ -7,7 +7,6 @@ struct ContentView: View {
     @SceneStorage("selectedConversation") private var selectedID = ""
     @AppStorage("lastConversationID") private var lastConversationID = "design"
     @SceneStorage("showInspector") private var showInspector = false
-    @ViewState<NavigationSplitViewVisibility> private var columnVisibility = .all
     @ViewState<InspectorTab> private var inspectorTab = .people
     @ViewState<String> private var conversationFilter = ""
     @ViewState<String> private var messageQuery = ""
@@ -16,11 +15,8 @@ struct ContentView: View {
     @ViewState<ConversationSearchFocus> private var searchFocus = ConversationSearchFocus()
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        TeamsSidebarLayout {
             SidebarView(store: store, selection: Binding(get: { selectedID }, set: { selectedID = $0 ?? "" }), filter: $conversationFilter)
-                .navigationTitle("Chats")
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-                .anchorPreference(key: TeamsSidebarBounds.self, value: .bounds) { $0 }
         } detail: {
             if let conversation = store.conversation(selectedID) {
                 TeamsConversationLayout(showInspector: $showInspector) {
@@ -51,8 +47,6 @@ struct ContentView: View {
                     .modifier(TeamsInsetPanel())
             }
         }
-        .navigationSplitViewStyle(.balanced)
-        .modifier(TeamsSidebarDividerCover())
         .background(TeamsSurface.window)
         .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .focusedSceneValue(\.chatActions, ChatWindowActions(
