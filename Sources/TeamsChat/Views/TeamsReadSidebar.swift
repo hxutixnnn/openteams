@@ -46,6 +46,13 @@ struct TeamsReadSidebar: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            conversationList.clipped()
+            accountFooter
+        }
+    }
+
+    private var conversationList: some View {
         List(selection: $selection) {
             if let selfChat = store.selfChat, !folders.contains(where: { itemIDs($0).contains(selfChat.id) }), matches(selfChat) {
                 Section("Personal") { row(selfChat) }
@@ -137,7 +144,6 @@ struct TeamsReadSidebar: View {
             }
         }
         .onChange(of: store.accountScope) { _, _ in expandedFolders = [:]; draftsOnly = false }
-        .safeAreaInset(edge: .bottom, spacing: 0) { accountFooter }
     }
 
     private var searchField: some View {
