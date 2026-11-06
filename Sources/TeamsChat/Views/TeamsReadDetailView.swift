@@ -8,7 +8,6 @@ struct TeamsMessageDestination: Equatable {
     let nonce = UUID()
 }
 
-
 struct TeamsReadDetailView: View {
     var store: TeamsReaderStore
     let chat: TeamsWebChat
@@ -22,6 +21,7 @@ struct TeamsReadDetailView: View {
     var loadFilePreview: ((TeamsSharePointAttachment) async throws -> Data)? = nil
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("compactMessages") private var compact = false
     @ViewState<String?> private var restoreAnchor: String? = nil
     @ViewState<Int> private var newMessageCount = 0
@@ -186,7 +186,9 @@ struct TeamsReadDetailView: View {
                     }
                 }
                 .scrollTargetLayout()
-                .padding(.horizontal, 20).padding(.vertical, 12)
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(maxWidth: 800)
+                .frame(maxWidth: .infinity)
                 .background {
                     if useLegacyObserver {
                         TeamsLegacyScrollObserver(changed: { value in
@@ -258,7 +260,7 @@ struct TeamsReadDetailView: View {
                     Button {
                         noteTimelineIntent()
                         if let last = messages.last?.id {
-                            withAnimation(.easeOut(duration: 0.18)) { proxy.scrollTo(last, anchor: .bottom) }
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { proxy.scrollTo(last, anchor: .bottom) }
                         }
                         newMessageCount = 0
                     } label: {
@@ -292,7 +294,7 @@ struct TeamsReadDetailView: View {
                 guard let destination, destination.chatID == chat.id, destination.accountScope == store.accountScope, store.accountRevision == accountRevision else { return }
                 let id = destination.messageID
                 noteTimelineIntent()
-                if messages.contains(where: { $0.id == id }) { withAnimation { proxy.scrollTo(id, anchor: .center) } }
+                if messages.contains(where: { $0.id == id }) { withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(id, anchor: .center) } }
                 else {
                     showMessageContext = true
                     Task { guard showMessageContext, selectedChatID == destination.chatID, store.accountScope == destination.accountScope, store.accountRevision == accountRevision else { return }; await store.openMessageContext(in: chat.id, targetID: id) }
@@ -349,7 +351,9 @@ struct TeamsReadDetailView: View {
                 newMessageCount = 0
                 jumpToMessage = .init(messageID: id, chatID: chat.id, accountScope: accountScope)
             }
-            .padding(.horizontal, 20).padding(.vertical, 10)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .frame(maxWidth: 800)
+            .frame(maxWidth: .infinity)
         }
     }
 

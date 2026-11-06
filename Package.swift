@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "OpenTeams",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS("27.0")],
     products: [
         .executable(name: "OpenTeams", targets: ["TeamsChat"]),
         .library(name: "TeamsCore", targets: ["TeamsCore"]),

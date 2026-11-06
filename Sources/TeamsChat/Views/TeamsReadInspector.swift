@@ -51,7 +51,7 @@ struct TeamsReadInspector: View {
             Picker("Inspector", selection: $tab) {
                 ForEach(InspectorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
-            .pickerStyle(.segmented).labelsHidden().tint(.secondary)
+            .pickerStyle(.segmented).labelsHidden()
             .padding(12)
             if tab == .people { details } else if tab == .search { search } else { shared }
         }
@@ -116,7 +116,7 @@ struct TeamsReadInspector: View {
                                     }.buttonStyle(.link)
                                 }
                             }.font(.caption)
-                        }.modifier(TeamsSectionPanel(radius: TeamsSurface.cardRadius))
+                        }.modifier(TeamsSectionPanel())
                     }
                     if sharedHasMore { Button("Load more") { Task { await loadShared(more: true) } }.disabled(sharedLoading) }
                 }
@@ -262,9 +262,7 @@ struct TeamsReadInspector: View {
     private var search: some View {
         VStack(alignment: .leading, spacing: 12) {
             ConversationSearchField(text: $query, focus: searchFocus, accessibilityName: "Search Teams messages") { searchServer() }
-                .padding(6)
-                .modifier(TeamsControlSurface())
-                .frame(height: 32)
+                .frame(height: 28)
             if store.canSearchServer {
                 Button(searching ? "Searching…" : "Search Teams") { searchServer() }.disabled(searching || store.searchCoolingDown || query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }

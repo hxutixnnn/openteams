@@ -25,6 +25,7 @@ struct TeamsMessageRow: View {
     var deletionStage: TeamsPendingDeletion.Stage? = nil
     var deletionMessage: String? = nil
     var canDelete = true
+    @FocusState private var actionsFocused: Bool
     @ViewState<Bool> private var isHovered = false
     @ViewState<Bool> private var showReactionPicker = false
     @ViewState<Set<Int>> private var expandedReplies = []
@@ -108,7 +109,7 @@ struct TeamsMessageRow: View {
                                     }
                                 }
                             } label: { Label("Add reaction", systemImage: "face.smiling").labelStyle(.iconOnly).font(.caption) }
-                                .menuStyle(.borderlessButton).foregroundStyle(.secondary).tint(.secondary).fixedSize().disabled(!canReact)
+                                .menuStyle(.borderlessButton).foregroundStyle(.secondary).fixedSize().disabled(!canReact)
                                 .help("Add reaction").accessibilityLabel("Add reaction")
                     }
                     }
@@ -141,6 +142,8 @@ struct TeamsMessageRow: View {
         .padding(.vertical, grouped ? 4 : (compact ? 6 : 8))
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .focusable()
+        .focused($actionsFocused)
         .overlay(alignment: .topLeading) {
             if grouped && isHovered {
                 Text(message.createdAt, format: .dateTime.hour().minute())
@@ -150,7 +153,7 @@ struct TeamsMessageRow: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if !contextActionsOnly && (isHovered || showReactionPicker) && !message.isDeleted {
+            if !contextActionsOnly && (isHovered || actionsFocused || showReactionPicker) && !message.isDeleted {
                 HStack(spacing: 2) {
                     if message.reactions.isEmpty {
                         Button { showReactionPicker.toggle() } label: { Image(systemName: "face.smiling") }
@@ -181,8 +184,7 @@ struct TeamsMessageRow: View {
                 }
                 .buttonStyle(.borderless).controlSize(.small).foregroundStyle(.secondary)
                 .padding(5)
-                .background(TeamsSurface.panel, in: RoundedRectangle(cornerRadius: TeamsSurface.controlRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: TeamsSurface.controlRadius, style: .continuous).strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth))
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: TeamsSurface.controlRadius))
                 .offset(y: -8)
             }
         }
@@ -354,9 +356,7 @@ private struct TeamsInlineImageView: View {
                     AnimatedTeamsImage(image: displayed).aspectRatio(displayed.size.width / max(displayed.size.height, 1), contentMode: .fit)
                 }
                 .padding(20)
-                .modifier(TeamsInsetPanel())
                 .background(TeamsSurface.window)
-                .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
                 .frame(minWidth: 500, minHeight: 350)
                 .task(id: revision.uuidString + image.url.absoluteString) {
                     fullPicture = nil

@@ -37,9 +37,8 @@ struct TeamsFilePreviewSheet: View {
             }
         }
         .padding(20)
-        .modifier(TeamsInsetPanel())
         .background(TeamsSurface.window)
-        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius)).frame(minWidth: 520, minHeight: 400)
+        .frame(minWidth: 520, minHeight: 400)
         .task {
             do {
                 let data = try await load(attachment)

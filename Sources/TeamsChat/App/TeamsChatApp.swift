@@ -50,7 +50,6 @@ struct TeamsChatApp: App {
                 ContentView(store: store, showcaseDetails: ProcessInfo.processInfo.arguments.contains("--showcase-dark"))
                     .defaultAppStorage(showcaseDefaults)
                     .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--showcase-dark") ? .dark : nil)
-                    .tint(ChatTheme.accent)
                     .frame(minWidth: 820, minHeight: 580)
             } else if ProcessInfo.processInfo.arguments.contains("--context-preview-fixture") || ProcessInfo.processInfo.arguments.contains("--context-preview-pdf-fixture") || ProcessInfo.processInfo.arguments.contains("--context-preview-held-fixture") {
                 TeamsContextPreviewFixtureView()
@@ -99,14 +98,11 @@ struct TeamsChatApp: App {
                 SettingsView(connection: connection, isolated: true)
                     .defaultAppStorage(TeamsPerformanceFixtureConfiguration.defaults)
                     .modifier(TeamsPerformanceFixtureAppearance())
-                    .tint(ChatTheme.accent)
             } else {
                 SettingsView(connection: connection)
-                    .tint(ChatTheme.accent)
             }
             #else
             SettingsView(connection: connection)
-                .tint(ChatTheme.accent)
             #endif
         }
 
@@ -116,12 +112,12 @@ struct TeamsChatApp: App {
                 ContentView(store: store)
                     .defaultAppStorage(TeamsPerformanceFixtureConfiguration.defaults)
                     .modifier(TeamsPerformanceFixtureAppearance())
-                    .tint(ChatTheme.accent).frame(minWidth: 820, minHeight: 580)
+                    .frame(minWidth: 820, minHeight: 580)
             } else {
-                ContentView(store: store).tint(ChatTheme.accent).frame(minWidth: 820, minHeight: 580)
+                ContentView(store: store).frame(minWidth: 820, minHeight: 580)
             }
             #else
-            ContentView(store: store).tint(ChatTheme.accent).frame(minWidth: 820, minHeight: 580)
+            ContentView(store: store).frame(minWidth: 820, minHeight: 580)
             #endif
         }
         .defaultSize(width: 1180, height: 800)
@@ -138,7 +134,6 @@ private struct TeamsChatRoot: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         TeamsReadContentView(store: connection.reader, refreshCoordinator: connection.refreshCoordinator, notificationRouter: appDelegate.notificationRouter, connect: connection.openSignIn, loadFilePreview: { try await connection.filePreview(for: $0) })
-                .tint(ChatTheme.accent)
                 .frame(minWidth: 820, minHeight: 580)
                 .onAppear { appDelegate.configure(coordinator: connection.refreshCoordinator) { openWindow(id: "chat") } }
                 .task { await connection.start() }

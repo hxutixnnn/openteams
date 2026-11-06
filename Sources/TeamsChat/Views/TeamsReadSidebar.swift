@@ -4,6 +4,7 @@ import TeamsCore
 struct TeamsReadSidebar: View {
     var store: TeamsReaderStore
     @Binding var selection: String?
+    @ViewState private var filterFocus = ConversationSearchFocus()
     @Binding var filter: String
     let connect: () -> Void
     let newChat: () -> Void
@@ -90,8 +91,6 @@ struct TeamsReadSidebar: View {
             }
         }
         .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .background(TeamsSurface.window)
         .overlay {
             if !filter.isEmpty && chats.isEmpty && !hasFolderResults && !(store.selfChat.map { matches($0) } ?? false) {
                 ContentUnavailableView.search(text: filter)
@@ -114,9 +113,13 @@ struct TeamsReadSidebar: View {
                 searchField
                 HStack {
                     Toggle("Unread", isOn: $unreadOnly)
-                        .toggleStyle(TeamsPillToggleStyle())
+                        .toggleStyle(.button)
                     Toggle("Drafts", isOn: $draftsOnly)
-                        .toggleStyle(TeamsPillToggleStyle()).help("Drafts saved on this Mac")
+                        .toggleStyle(.button).help("Drafts saved on this Mac")
+                    if unreadOnly || draftsOnly || !filter.isEmpty {
+                        Button("Clear") { unreadOnly = false; draftsOnly = false; filter = "" }
+                            .help("Clear conversation filters").accessibilityLabel("Clear conversation filters")
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, 12).padding(.bottom, 4)
@@ -138,21 +141,10 @@ struct TeamsReadSidebar: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("", text: $filter, prompt: Text("Find a conversation"))
-                .textFieldStyle(.plain).labelsHidden()
-                .accessibilityLabel("Find a Teams conversation")
-                .onExitCommand { filter = "" }
-            if !filter.isEmpty {
-                Button { filter = "" } label: { Image(systemName: "xmark.circle.fill") }
-                    .buttonStyle(.plain).foregroundStyle(.secondary)
-                    .accessibilityLabel("Clear conversation search")
-            }
-        }
-        .padding(8)
-        .modifier(TeamsControlSurface())
-        .padding(.horizontal, 12).padding(.bottom, 2)
+        ConversationSearchField(text: $filter, focus: filterFocus, accessibilityName: "Find a Teams conversation",
+                                placeholder: "Filter conversations", focusOnAppear: false)
+            .frame(height: 28)
+            .padding(.horizontal, 12).padding(.bottom, 2)
     }
 
     private var accountFooter: some View {

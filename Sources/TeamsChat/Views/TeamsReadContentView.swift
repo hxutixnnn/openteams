@@ -46,19 +46,15 @@ struct TeamsReadContentView: View {
                              newChat: { newChatPresentation = .init(account: store.accountScope, revision: store.accountRevision) })
                 .navigationTitle("Chats")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-                .anchorPreference(key: TeamsSidebarBounds.self, value: .bounds) { $0 }
         } detail: {
             Group {
                 if selectedChat != nil { detail }
-                else { detail.frame(maxWidth: .infinity, maxHeight: .infinity).modifier(TeamsInsetPanel()) }
+                else { detail.frame(maxWidth: .infinity, maxHeight: .infinity) }
             }
             .toolbar { toolbar }
-            .toolbarBackground(.hidden, for: .windowToolbar)
         }
         .navigationSplitViewStyle(.balanced)
-        .modifier(TeamsSidebarDividerCover())
         .background(TeamsSurface.window)
-        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
         .background(TeamsWindowProbe { window in
             refreshCoordinator.attachWindow(windowID, window: window)
             routePendingNotification()
@@ -73,7 +69,9 @@ struct TeamsReadContentView: View {
         .focusedSceneValue(\.chatActions, ChatWindowActions(
             search: openSearch,
             details: { inspectorTab = .people; showInspector.toggle() },
-            compose: { focusRequest = UUID() }, canCompose: selectedChat != nil
+            compose: { focusRequest = UUID() }, canCompose: selectedChat != nil,
+            newChat: store.canFindPeople ? { newChatPresentation = .init(account: store.accountScope, revision: store.accountRevision) } : nil,
+            canInspect: selectedChat != nil
         ))
         .onChange(of: store.connected) { _, connected in
             if !connected && !store.sessionExpired { newChatPresentation = nil }
@@ -253,7 +251,6 @@ struct TeamsReadContentView: View {
         selectedID = destination.chatID
     }
 }
-
 
 private struct NewChatPresentation: Identifiable {
     let id = UUID()

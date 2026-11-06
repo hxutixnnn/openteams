@@ -6,6 +6,7 @@ struct ChatDetailView: View {
     let conversation: Conversation
     @Binding var jumpToMessage: String?
     let focusComposer: UUID
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("compactMessages") private var compact = false
     @ViewState<String?> private var newestLocalMessage: String? = nil
 
@@ -39,7 +40,9 @@ struct ChatDetailView: View {
                         }
                         Color.clear.frame(height: 1).id("timeline-bottom")
                     }
-                    .padding(.horizontal, 20).padding(.vertical, 16)
+                    .padding(.horizontal, 16).padding(.vertical, 16)
+                    .frame(maxWidth: 800)
+                    .frame(maxWidth: .infinity)
                 }
                 .defaultScrollAnchor(.bottom)
                 .onChange(of: conversation.id) { _, _ in
@@ -47,11 +50,11 @@ struct ChatDetailView: View {
                 }
                 .onChange(of: newestLocalMessage) { _, value in
                     guard value != nil else { return }
-                    withAnimation(.easeOut(duration: 0.18)) { proxy.scrollTo("timeline-bottom", anchor: .bottom) }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { proxy.scrollTo("timeline-bottom", anchor: .bottom) }
                 }
                 .onChange(of: jumpToMessage) { _, id in
                     guard let id else { return }
-                    withAnimation { proxy.scrollTo(id, anchor: .center) }
+                    withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(id, anchor: .center) }
                 }
             }
 
@@ -61,7 +64,9 @@ struct ChatDetailView: View {
             ), conversationID: conversation.id, focusRequest: focusComposer, persistenceError: store.persistenceError, persistsDrafts: store.persistsDrafts) {
                 newestLocalMessage = store.sendDraft(in: conversation.id)?.id
             }
-            .padding(.horizontal, 20).padding(.bottom, 10).padding(.top, 8)
+            .padding(.horizontal, 16).padding(.bottom, 10).padding(.top, 8)
+            .frame(maxWidth: 800)
+            .frame(maxWidth: .infinity)
         }
     }
 
