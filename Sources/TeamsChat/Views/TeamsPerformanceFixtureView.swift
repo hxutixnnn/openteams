@@ -45,7 +45,10 @@ struct TeamsPerformanceFixtureAppearance: ViewModifier {
     init(root: URL) {
         gate = Bundle.main.object(forInfoDictionaryKey: "OpenTeamsCachedLoadHoldEnabled") as? Bool == true
             ? TeamsCachedLoadGate(traceURL: root.appendingPathComponent("cached-load-trace.jsonl")) : nil
-        transport = PerformanceFixtureTransport(allowsSend: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFictionalSendEnabled") as? Bool == true, gate: gate)
+        transport = PerformanceFixtureTransport(allowsSend: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFictionalSendEnabled") as? Bool == true, gate: gate,
+            sendOutcome: PerformanceFixtureTransport.SendOutcome(rawValue: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureSendOutcome") as? String ?? "accepted") ?? .accepted,
+            sendDelay: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureSendDelay") as? Double ?? 0,
+            sendObservationURL: root.appendingPathComponent("send-observation.json"))
         cacheRoot = root.appendingPathComponent("ReadCache")
         store = TeamsReaderStore(cacheRoot: root.appendingPathComponent("ReadCache"), transport: transport,
                                  mediaFactory: { _ in throw TeamsMediaError.unavailable })
