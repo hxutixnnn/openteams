@@ -16,6 +16,7 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
     @ViewState<Bool> private var pointerAtEdge = false
     @ViewState<Task<Void, Never>?> private var hoverTask = nil
     @ViewState<NSView?> private var sidebarProbe = nil
+    @ViewState<CGFloat> private var availableWidth = 1180
 
     private var mode: TeamsSidebarMode { TeamsSidebarMode(rawValue: storedMode) ?? .docked }
 
@@ -36,6 +37,8 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
                         .accessibilityHidden(true)
                 }
                 sidebar()
+                    .environment(\.dismissSidebarOverlay, overlay ? { dismissOverlay(); return true } : nil)
+                    .disabled(!visible)
                     .frame(width: sidebarWidth)
                     .frame(maxHeight: .infinity)
                     .background(TeamsSidebarFocusProbe { sidebarProbe = $0 })
@@ -79,13 +82,18 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
                 }
             }
             .clipped()
+            .onChange(of: geometry.size.width, initial: true) { oldWidth, width in
+                if oldWidth >= 980, width < 980, mode == .docked { releaseSidebarFocus() }
+                availableWidth = width
+            }
             .onChange(of: docked) { _, _ in resetHover() }
         }
         .background(TeamsSurface.window)
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button {
-                    select(mode == .hidden ? .docked : .hidden)
+                    let visible = (mode == .docked && availableWidth >= 980) || mode == .overlay || hoverOverlay
+                    select(visible ? .hidden : (availableWidth >= 980 ? .docked : .overlay))
                 } label: {
                     Label("Toggle Sidebar", systemImage: "sidebar.left")
                 }
@@ -110,6 +118,7 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
     }
 
     private func select(_ value: TeamsSidebarMode) {
+        if value == .hidden || (value == .docked && availableWidth < 980) { releaseSidebarFocus() }
         resetHover()
         storedMode = value.rawValue
     }
@@ -118,6 +127,13 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
         if sidebarHasKeyboardFocus, let window = sidebarProbe?.window { window.makeFirstResponder(nil) }
         if mode == .overlay { storedMode = TeamsSidebarMode.hidden.rawValue }
         resetHover()
+    }
+
+    private func releaseSidebarFocus() {
+        guard let window = sidebarProbe?.window, let responder = window.firstResponder as? NSView,
+              let content = window.contentView else { return }
+        let rect = content.convert(responder.bounds, from: responder)
+        if rect.midX < 260 { window.makeFirstResponder(nil) }
     }
 
     private func resetHover() {
@@ -156,4 +172,15 @@ private struct TeamsSidebarFocusProbe: NSViewRepresentable {
         return view
     }
     func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private struct DismissSidebarOverlayKey: EnvironmentKey {
+    static let defaultValue: (() -> Bool)? = nil
+}
+
+extension EnvironmentValues {
+    var dismissSidebarOverlay: (() -> Bool)? {
+        get { self[DismissSidebarOverlayKey.self] }
+        set { self[DismissSidebarOverlayKey.self] = newValue }
+    }
 }

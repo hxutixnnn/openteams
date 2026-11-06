@@ -4,6 +4,7 @@ import TeamsCore
 struct TeamsReadSidebar: View {
     var store: TeamsReaderStore
     @Binding var selection: String?
+    @Environment(\.dismissSidebarOverlay) private var dismissSidebarOverlay
     @Binding var filter: String
     let connect: () -> Void
     let newChat: () -> Void
@@ -143,7 +144,7 @@ struct TeamsReadSidebar: View {
             TextField("", text: $filter, prompt: Text("Find a conversation"))
                 .textFieldStyle(.plain).labelsHidden()
                 .accessibilityLabel("Find a Teams conversation")
-                .onExitCommand { filter = "" }
+                .onExitCommand { if dismissSidebarOverlay?() != true { filter = "" } }
             if !filter.isEmpty {
                 Button { filter = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain).foregroundStyle(.secondary)

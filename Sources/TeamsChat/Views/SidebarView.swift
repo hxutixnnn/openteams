@@ -4,6 +4,7 @@ import TeamsCore
 struct SidebarView: View {
     var store: FixtureChatStore
     @Binding var selection: String?
+    @Environment(\.dismissSidebarOverlay) private var dismissSidebarOverlay
     @Binding var filter: String
 
     private var conversations: [Conversation] {
@@ -30,7 +31,7 @@ struct SidebarView: View {
                 TextField("", text: $filter, prompt: Text("Find a conversation"))
                     .textFieldStyle(.plain).labelsHidden()
                     .accessibilityLabel("Find a conversation")
-                    .onExitCommand { filter = "" }
+                    .onExitCommand { if dismissSidebarOverlay?() != true { filter = "" } }
                 if !filter.isEmpty {
                     Button { filter = "" } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.plain).foregroundStyle(.secondary)
