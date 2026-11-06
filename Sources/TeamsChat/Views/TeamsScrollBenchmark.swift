@@ -7,6 +7,21 @@ import SwiftUI
     static var detailBody = 0
     static var rowBody = 0
     static var rowText = 0
+    static var rowIDs: Set<String> = []
+    static var hoverChanges = 0
+
+    static func noteRowBody(_ id: String) {
+        rowBody += 1
+        rowIDs.insert(id)
+    }
+
+    static func reset() {
+        detailBody = 0
+        rowBody = 0
+        rowText = 0
+        rowIDs = []
+        hoverChanges = 0
+    }
 }
 
 @MainActor @Observable final class TeamsScrollBenchmarkDriver {
@@ -31,6 +46,8 @@ import SwiftUI
         let detailBodiesPerSecond: Double
         let rowBodiesPerSecond: Double
         let rowTextsPerSecond: Double
+        let distinctRowIDsPerSecond: Double
+        let hoverChangesPerSecond: Double
     }
 
     static let requested = ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--scroll-benchmark") })
@@ -59,8 +76,9 @@ import SwiftUI
     private var travelled: CGFloat = 0
     private weak var scroll: NSScrollView?
     private var lastWheelTick: CFTimeInterval = 0
-    private let mode = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--scroll-benchmark-mode=") })
+    static let mode = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--scroll-benchmark-mode=") })
         .map { String($0.dropFirst("--scroll-benchmark-mode=".count)) } ?? "jump"
+    private var mode: String { Self.mode }
 
     func start(ids: [String], output: URL, markScrollIntent: @escaping () -> Void) {
         guard !started, ids.count > 4 else { return }
@@ -95,7 +113,7 @@ import SwiftUI
         let elapsed = now - startTime
         if !recording && elapsed >= warmup {
             recording = true; intervals.removeAll(keepingCapacity: true)
-            TeamsBenchmarkCounters.detailBody = 0; TeamsBenchmarkCounters.rowBody = 0; TeamsBenchmarkCounters.rowText = 0
+            TeamsBenchmarkCounters.reset()
             return
         }
         if elapsed >= warmup + duration { finish(error: nil); return }
@@ -188,7 +206,9 @@ import SwiftUI
             scrolledDistance: Double(travelled),
             detailBodiesPerSecond: measured > 0 ? Double(TeamsBenchmarkCounters.detailBody) / measured : 0,
             rowBodiesPerSecond: measured > 0 ? Double(TeamsBenchmarkCounters.rowBody) / measured : 0,
-            rowTextsPerSecond: measured > 0 ? Double(TeamsBenchmarkCounters.rowText) / measured : 0
+            rowTextsPerSecond: measured > 0 ? Double(TeamsBenchmarkCounters.rowText) / measured : 0,
+            distinctRowIDsPerSecond: measured > 0 ? Double(TeamsBenchmarkCounters.rowIDs.count) / measured : 0,
+            hoverChangesPerSecond: measured > 0 ? Double(TeamsBenchmarkCounters.hoverChanges) / measured : 0
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -213,15 +233,23 @@ struct TeamsScrollBenchmarkTarget: ViewModifier {
     let markScrollIntent: () -> Void
     @State private var driver = TeamsScrollBenchmarkDriver()
 
-    func body(content: Content) -> some View {
-        content
-            .scrollPosition(id: Binding(get: { driver.targetID }, set: { driver.targetID = $0 }), anchor: .center)
-            .task(id: ids.count) {
-                guard TeamsScrollBenchmarkDriver.requested, !ids.isEmpty,
-                      let root = TeamsPerformanceFixtureConfiguration.root else { return }
-                try? await Task.sleep(for: .seconds(3))
-                driver.start(ids: ids, output: root.appendingPathComponent("scroll-benchmark.json"), markScrollIntent: markScrollIntent)
-            }
+    @ViewBuilder func body(content: Content) -> some View {
+        if TeamsScrollBenchmarkDriver.mode == "jump" {
+            content
+                .scrollPosition(id: Binding(get: { driver.targetID }, set: { driver.targetID = $0 }), anchor: .center)
+                .task(id: ids.count) { start() }
+        } else {
+            content.task(id: ids.count) { start() }
+        }
+    }
+
+    private func start() {
+        Task { @MainActor in
+            guard TeamsScrollBenchmarkDriver.requested, !ids.isEmpty,
+                  let root = TeamsPerformanceFixtureConfiguration.root else { return }
+            try? await Task.sleep(for: .seconds(3))
+            driver.start(ids: ids, output: root.appendingPathComponent("scroll-benchmark.json"), markScrollIntent: markScrollIntent)
+        }
     }
 }
 #endif
