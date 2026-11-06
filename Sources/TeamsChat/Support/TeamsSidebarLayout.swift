@@ -49,7 +49,6 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
                                 .allowsHitTesting(false)
                         }
                     }
-                    .shadow(color: .black.opacity(overlay ? 0.18 : 0), radius: 12, x: 4, y: 0)
                     .padding(.vertical, overlay ? TeamsSurface.inset : 0)
                     .offset(x: visible ? 0 : -sidebarWidth - 20)
                     .opacity(visible ? 1 : 0)
