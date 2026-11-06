@@ -47,7 +47,7 @@ struct ConversationIcon: View {
             .font(.system(size: size * 0.42, weight: .medium))
             .foregroundStyle(ChatTheme.color(conversation.colorIndex))
             .frame(width: size, height: size)
-            .background(ChatTheme.color(conversation.colorIndex).opacity(0.12), in: RoundedRectangle(cornerRadius: size * 0.28))
+            .background(ChatTheme.color(conversation.colorIndex).opacity(0.12), in: RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
             .accessibilityHidden(true)
     }
 }

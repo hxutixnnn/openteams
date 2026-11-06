@@ -8,6 +8,7 @@ import TeamsCore
     static let enabled = Bundle.main.object(forInfoDictionaryKey: "OpenTeamsPerformanceFixtureRoot") != nil || ProcessInfo.processInfo.arguments.contains("--performance-fixture")
     static let startupConversation = PerformanceFixtureStartupConversation(rawValue: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureStartupConversation") as? String ?? "project") ?? .project
     static let defaults = UserDefaults(suiteName: "OpenTeams.performance-fixture." + UUID().uuidString)!
+    static let appearance = TeamsPerformanceFixtureAppearanceState()
     static let root: URL? = {
         guard let path = Bundle.main.object(forInfoDictionaryKey: "OpenTeamsPerformanceFixtureRoot") as? String else { return nil }
         let root = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
@@ -17,6 +18,19 @@ import TeamsCore
               FileManager.default.fileExists(atPath: root.appendingPathComponent("fixture.json").path) else { return nil }
         return root
     }()
+}
+
+@MainActor @Observable final class TeamsPerformanceFixtureAppearanceState {
+    var selection = "System"
+    var colorScheme: ColorScheme? { selection == "Dark" ? .dark : selection == "Light" ? .light : nil }
+}
+
+struct TeamsPerformanceFixtureAppearance: ViewModifier {
+    @Bindable private var appearance = TeamsPerformanceFixtureConfiguration.appearance
+
+    func body(content: Content) -> some View {
+        content.preferredColorScheme(appearance.colorScheme)
+    }
 }
 
 @MainActor @Observable private final class PerformanceFixtureController {
@@ -83,6 +97,10 @@ struct TeamsPerformanceFixtureView: View {
 private struct PerformanceFixtureContent: View {
     @ViewState<PerformanceFixtureController> private var controller: PerformanceFixtureController
     @ViewState<TeamsNotificationRouter> private var router = TeamsNotificationRouter()
+    @ViewState<FixtureChatStore> private var sampleStore = FixtureChatStore(draftURL: nil)
+    @ViewState<Bool> private var sampleWorkspace = false
+    @ViewState<Bool> private var inlineImage = false
+    @Bindable private var appearance = TeamsPerformanceFixtureConfiguration.appearance
 
     init(root: URL) {
         _controller = ViewState(initialValue: PerformanceFixtureController(root: root))
@@ -91,7 +109,7 @@ private struct PerformanceFixtureContent: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Isolated fixture · \(controller.store.accountID) · \(controller.ready ? "Ready" : "Loading")")
+                Text("Isolated fixture · \(controller.store.accountID) · \(controller.ready ? "Ready" : "Loading")").lineLimit(1)
                 Button("Account A") { Task { await controller.connect("fixture-a") } }
                 Button("Account B") { Task { await controller.connect("fixture-b") } }
                 Button("Append and refresh") { Task { await controller.append() } }
@@ -119,12 +137,65 @@ private struct PerformanceFixtureContent: View {
                 }
                 .font(.caption).padding(8)
             }
-            TeamsReadContentView(store: controller.store, refreshCoordinator: controller.coordinator,
-                                 notificationRouter: router, connect: {}, persistSelection: false,
-                                 fixtureStartupConversation: TeamsPerformanceFixtureConfiguration.startupConversation)
+            HStack {
+                Toggle("Sample Workspace", isOn: $sampleWorkspace).toggleStyle(TeamsPillToggleStyle())
+                Toggle("Inline image", isOn: $inlineImage).toggleStyle(TeamsPillToggleStyle())
+                Text("Appearance")
+                ForEach(["System", "Light", "Dark"], id: \.self) { selection in
+                    Button(selection) { appearance.selection = selection }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .tint(appearance.selection == selection ? ChatTheme.accent : .secondary)
+                        .accessibilityLabel("\(selection) appearance")
+                        .accessibilityValue(appearance.selection == selection ? "Selected" : "Not selected")
+                        .accessibilityAddTraits(appearance.selection == selection ? [.isSelected] : [])
+                }
+                Spacer()
+                SettingsLink { Label("Settings", systemImage: "gearshape") }
+            }
+            .padding(.horizontal, 10).padding(.bottom, 6)
+            if inlineImage {
+                RoundedInlineImageFixtureView(revision: controller.store.mediaRevision)
+            } else if sampleWorkspace {
+                ContentView(store: sampleStore)
+            } else {
+                TeamsReadContentView(store: controller.store, refreshCoordinator: controller.coordinator,
+                                     notificationRouter: router, connect: {}, persistSelection: false,
+                                     fixtureStartupConversation: TeamsPerformanceFixtureConfiguration.startupConversation)
+            }
         }
-        .frame(minWidth: 1000, minHeight: 650)
+        .tint(ChatTheme.accent)
+        .background(TeamsSurface.window)
+        .frame(minWidth: 820, minHeight: 580)
         .task { await controller.connect("fixture-a") }
+    }
+}
+
+private struct RoundedInlineImageFixtureView: View {
+    let revision: UUID
+    @ViewState<Bool> private var fullSizeRequested = false
+    private let imageURL = URL(string: "https://us-api.asm.skype.com/v1/objects/rounded-fixture/views/imgo")!
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Fictional inline image").font(.headline)
+            Text(fullSizeRequested ? "Full-size requested" : "Thumbnail only").font(.caption)
+            let message = TeamsWebMessage(id: "rounded-image", content: #"<p>Fictional image preview</p><img src="https://us-api.asm.skype.com/v1/objects/rounded-fixture/views/imgo" width="400" height="100" alt="Rounded fixture image">"#, messageType: "RichText/Html", imDisplayName: "Alex Example")
+            TeamsMessageRow(message: TeamsRenderedMessage(message, accountScope: "rounded-fixture", accountRevision: revision, chatID: "image"), compact: false, grouped: false,
+                accountID: "fixture-a", canEdit: false, canReact: false,
+                mediaRevision: revision, mediaRefreshRevision: revision,
+                loadImage: { image, fullSize in
+                    guard image.url == imageURL else { throw TeamsMediaError.unsafeURL }
+                    try Task.checkCancellation()
+                    if fullSize { fullSizeRequested = true }
+                    return Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAZAAAABkCAIAAAAnqfEgAAABl0lEQVR4nO3YwQ3CMBAAwYCoDZpIBaGeVBCaSHc0wCMCS2iVmb+te63OvtyXbQIouP57AICjBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIOP2y+F9ncdNApzF4/n67qANC8gQLCBDsIBz/GENeZQCZ7CP+PK2YQEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAxm3URfs6j7oK4CMbFpAhWECGYAEZl/uy/XsGgENsWECGYAEZggVkCBaQIVhAhmABGYIFZAgWkCFYQIZgARmCBWQIFpAhWECGYAEZggVkCBaQIVhAhmABU8Ub1voLHfGLJMoAAAAASUVORK5CYII=")!
+                }, loadPhoto: { _ in throw TeamsMediaError.unavailable },
+                replyAuthor: { _ in "Alex Example" }, canJumpToMessage: { _ in false }, jumpToMessage: { _ in }, action: { _ in }, canDelete: false)
+            Spacer()
+        }
+        .padding(20)
+        .modifier(TeamsInsetPanel())
+        .onChange(of: revision) { _, _ in fullSizeRequested = false }
     }
 }
 #endif

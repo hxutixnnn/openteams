@@ -3,7 +3,6 @@ import SwiftUI
 import TeamsCore
 
 struct TeamsMessageRow: View {
-    @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var colorScheme
     let message: TeamsRenderedMessage
     let compact: Bool
@@ -73,13 +72,13 @@ struct TeamsMessageRow: View {
                             replyCard(reply, groupID: groupID)
                         } else if group.first?.quoteGroup != nil {
                             HStack(alignment: .top, spacing: 8) {
-                                RoundedRectangle(cornerRadius: 2).fill(Color.secondary.opacity(0.4)).frame(width: 3)
+                                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(ChatTheme.accent.opacity(0.6)).frame(width: 3)
                                 VStack(alignment: .leading, spacing: 4) {
                                     ForEach(Array(group.enumerated()), id: \.offset) { _, block in blockView(block) }
                                 }.foregroundStyle(.secondary).padding(.vertical, 8)
                             }
                             .padding(.horizontal, 8)
-                            .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius))
+                            .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
                         } else if let block = group.first { blockView(block) }
                     }
                     if message.body.blocks.isEmpty && !message.body.text.isEmpty {
@@ -182,8 +181,8 @@ struct TeamsMessageRow: View {
                 }
                 .buttonStyle(.borderless).controlSize(.small).foregroundStyle(.secondary)
                 .padding(5)
-                .background(TeamsSurface.panel, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(TeamsSurface.border, lineWidth: 1 / max(displayScale, 1)))
+                .background(TeamsSurface.panel, in: RoundedRectangle(cornerRadius: TeamsSurface.controlRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: TeamsSurface.controlRadius, style: .continuous).strokeBorder(TeamsSurface.border, lineWidth: TeamsSurface.borderWidth))
                 .offset(y: -8)
             }
         }
@@ -221,7 +220,7 @@ struct TeamsMessageRow: View {
     private func replyCard(_ reply: TeamsReplyPreview, groupID: Int) -> some View {
         let expanded = expandedReplies.contains(groupID)
         return HStack(alignment: .top, spacing: 8) {
-            RoundedRectangle(cornerRadius: 2).fill(Color.secondary.opacity(0.4)).frame(width: 3)
+            RoundedRectangle(cornerRadius: 2, style: .continuous).fill(ChatTheme.accent.opacity(0.6)).frame(width: 3)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(replyAuthor(reply)).font(.caption.weight(.semibold)).lineLimit(1)
@@ -245,7 +244,7 @@ struct TeamsMessageRow: View {
             }.padding(.vertical, 8)
         }
         .padding(.horizontal, 8)
-        .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius))
+        .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
     }
 
     private var blockGroups: [[TeamsTextBlock]] {
@@ -269,7 +268,7 @@ struct TeamsMessageRow: View {
             Text(block.runs.map(\.text).joined()).font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
         case .image:
             if let image = block.image {
                 TeamsInlineImageView(image: image, revision: mediaRevision, refreshRevision: mediaRefreshRevision, load: loadImage)
@@ -327,7 +326,7 @@ private struct TeamsInlineImageView: View {
                     AnimatedTeamsImage(image: picture)
                         .aspectRatio(picture.size.width / max(picture.size.height, 1), contentMode: .fit)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
                 }.buttonStyle(.plain).accessibilityLabel("Preview \(image.alternativeText)")
             } else if loadedRevision == revision && loadedURL == image.url && failed {
                 HStack(spacing: 8) {
@@ -353,11 +352,16 @@ private struct TeamsInlineImageView: View {
                     Button("Close") { showPreview = false }
                     let displayed = fullPicture ?? picture
                     AnimatedTeamsImage(image: displayed).aspectRatio(displayed.size.width / max(displayed.size.height, 1), contentMode: .fit)
-                }.padding(20).frame(minWidth: 500, minHeight: 350)
-                    .task(id: revision.uuidString + image.url.absoluteString) {
-                        fullPicture = nil
-                        if let data = try? await load(image, true), !Task.isCancelled { fullPicture = NSImage(data: data) }
-                    }
+                }
+                .padding(20)
+                .modifier(TeamsInsetPanel())
+                .background(TeamsSurface.window)
+                .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius))
+                .frame(minWidth: 500, minHeight: 350)
+                .task(id: revision.uuidString + image.url.absoluteString) {
+                    fullPicture = nil
+                    if let data = try? await load(image, true), !Task.isCancelled { fullPicture = NSImage(data: data) }
+                }
             }
         }
         .onChange(of: showPreview) { _, showing in if !showing { fullPicture = nil } }

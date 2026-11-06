@@ -22,7 +22,7 @@ struct ChatDetailView: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 26).padding(.vertical, 18)
+            .padding(.horizontal, 20).padding(.vertical, 14)
             Divider().opacity(0.5)
 
             ScrollViewReader { proxy in
@@ -39,7 +39,7 @@ struct ChatDetailView: View {
                         }
                         Color.clear.frame(height: 1).id("timeline-bottom")
                     }
-                    .padding(.horizontal, 28).padding(.vertical, 22)
+                    .padding(.horizontal, 20).padding(.vertical, 16)
                 }
                 .defaultScrollAnchor(.bottom)
                 .onChange(of: conversation.id) { _, _ in
@@ -61,7 +61,7 @@ struct ChatDetailView: View {
             ), conversationID: conversation.id, focusRequest: focusComposer, persistenceError: store.persistenceError, persistsDrafts: store.persistsDrafts) {
                 newestLocalMessage = store.sendDraft(in: conversation.id)?.id
             }
-            .padding(.horizontal, 22).padding(.bottom, 16).padding(.top, 8)
+            .padding(.horizontal, 20).padding(.bottom, 10).padding(.top, 8)
         }
     }
 

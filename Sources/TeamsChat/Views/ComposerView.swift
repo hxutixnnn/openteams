@@ -24,9 +24,12 @@ struct ComposerView: View {
                 }
                 .frame(height: 72)
                 HStack(spacing: 10) {
-                    Text(sendOnReturn ? "Return to send · Shift Return for a new line" : "⌘ Return to send")
-                        .font(.caption).foregroundStyle(.tertiary)
-                    Spacer()
+                    ViewThatFits(in: .horizontal) {
+                        Text(sendOnReturn ? "Return to send · Shift Return for a new line" : "⌘ Return to send")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize()
+                        EmptyView()
+                    }.layoutPriority(-1)
+                    Spacer(minLength: 4)
                     Button(action: send) {
                         Label("Send locally", systemImage: "arrow.up")
                             .font(.callout.weight(.medium))
@@ -37,8 +40,8 @@ struct ComposerView: View {
                 }
                 .padding(.horizontal, 12).padding(.bottom, 10)
             }
-            .background(.background, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.quaternary, lineWidth: 1))
+            .background(TeamsSurface.input, in: RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: TeamsSurface.nestedRadius, style: .continuous).strokeBorder(TeamsSurface.border, lineWidth: 1))
             HStack {
                 Image(systemName: persistenceError == nil ? "leaf" : "exclamationmark.triangle")
                 Text(persistenceError ?? (persistsDrafts ? "Demo messages stay on this Mac. Drafts are saved as you type." : "Sample messages and drafts last until you quit."))

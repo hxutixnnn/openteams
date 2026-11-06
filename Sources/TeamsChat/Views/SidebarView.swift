@@ -22,6 +22,8 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(TeamsSurface.window)
         .safeAreaInset(edge: .top) {
             HStack(spacing: 7) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -36,7 +38,7 @@ struct SidebarView: View {
                 }
             }
             .padding(8)
-            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+            .modifier(TeamsControlSurface())
             .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 6)
         }
         .overlay {
@@ -56,7 +58,7 @@ struct SidebarView: View {
                     .help("Demo conversations, stored only on this Mac")
             }
             .padding(14)
-            .background(.bar)
+            .background(TeamsSurface.window)
         }
     }
 

@@ -91,7 +91,8 @@ struct TeamsReadDetailView: View {
                 }
             }
             .padding(.horizontal, 24).padding(.vertical, 12)
-            .background(.quaternary.opacity(0.3))
+            .background(TeamsSurface.nested, in: RoundedRectangle(cornerRadius: TeamsSurface.cardRadius, style: .continuous))
+            .padding(TeamsSurface.inset)
         } else if store.sessionExpired || !store.connected {
             HStack {
                 Label("Showing messages saved on this Mac", systemImage: "internaldrive")

@@ -52,14 +52,14 @@ struct TeamsMentionSuggestions: View {
                             }
                             Spacer()
                         }.contentShape(Rectangle()).padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(index == picker.selected ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                            .background(index == picker.selected ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: TeamsSurface.controlRadius, style: .continuous))
                     }.buttonStyle(.plain).accessibilityLabel(candidate.name + ", member \(index + 1)")
                 }
             }
             .padding(5)
             .frame(maxWidth: 280, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(TeamsSurface.border))
+            .background(TeamsSurface.panel, in: RoundedRectangle(cornerRadius: TeamsSurface.controlRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: TeamsSurface.controlRadius, style: .continuous).strokeBorder(TeamsSurface.border))
         }
     }
 }

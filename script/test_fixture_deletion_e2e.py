@@ -19,14 +19,12 @@ for module in ["TeamsCore", "SwiftSoup"]:
     if not module_objects:
         raise SystemExit("Missing build objects for " + module)
     objects.extend(module_objects)
-source = (repository / "Sources/TeamsChat/Views/TeamsPerformanceFixtureView.swift").read_text()
-transport = source.split("private actor PerformanceFixtureTransport:", 1)[1].split("@MainActor @Observable private final class PerformanceFixtureController", 1)[0]
+transport = repository / "Sources/TeamsChat/Views/PerformanceFixtureTransport.swift"
 workflow = (repository / "Tests/E2E/FixtureDeletion/Workflow.swift").read_text()
-if "init(allowsSend: Bool)" in transport:
-    workflow = workflow.replace("PerformanceFixtureTransport()", "PerformanceFixtureTransport(allowsSend: false)")
+workflow = workflow.replace("PerformanceFixtureTransport()", "PerformanceFixtureTransport(allowsSend: false)")
 with tempfile.TemporaryDirectory(prefix="openteams-deletion-e2e-") as directory:
     generated = Path(directory) / "FixtureDeletion.swift"
-    generated.write_text("import Foundation\nimport TeamsCore\nprivate actor PerformanceFixtureTransport:" + transport + workflow)
+    generated.write_text("import Foundation\nimport TeamsCore\n" + workflow)
     executable = Path(directory) / "FixtureDeletion"
-    subprocess.run(["swiftc", "-parse-as-library", "-swift-version", "6", "-Onone", "-I", str(modules), str(generated), *map(str, objects), "-o", str(executable)], cwd=repository, check=True, timeout=120)
+    subprocess.run(["swiftc", "-D", "DEBUG", str(transport), "-parse-as-library", "-swift-version", "6", "-Onone", "-I", str(modules), str(generated), *map(str, objects), "-o", str(executable)], cwd=repository, check=True, timeout=120)
     subprocess.run([str(executable)], cwd=repository, check=True, timeout=30)

@@ -36,7 +36,10 @@ struct TeamsFilePreviewSheet: View {
                 ProgressView("Loading preview…").frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .padding(20).frame(minWidth: 520, minHeight: 400)
+        .padding(20)
+        .modifier(TeamsInsetPanel())
+        .background(TeamsSurface.window)
+        .buttonBorderShape(.roundedRectangle(radius: TeamsSurface.controlRadius)).frame(minWidth: 520, minHeight: 400)
         .task {
             do {
                 let data = try await load(attachment)
