@@ -61,6 +61,10 @@ struct SettingsView: View {
                     Text("Fictional conversations with local sending and saved drafts.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                TeamsSettingsSection("Updates") {
+                    Button("Check for Updates…") { openWindow(id: "updates") }
+                        .disabled(isolated)
+                }
             }
             .padding(16)
         }

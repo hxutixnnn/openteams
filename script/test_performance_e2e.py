@@ -32,6 +32,8 @@ for module in ["TeamsCore", "SwiftSoup"]:
 
 with tempfile.TemporaryDirectory(prefix="openteams-performance-e2e-") as directory:
     for source in sorted((repository / "Tests/E2E").glob("*.swift")):
+        if source.stem == "AppUpdateCheck":
+            continue
         if arguments.scenario and source.stem != arguments.scenario:
             continue
         executable = Path(directory) / source.stem

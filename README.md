@@ -217,12 +217,30 @@ assets/                    icon sources and screenshots
 
 Only external dependency: [SwiftSoup](https://github.com/scinfu/SwiftSoup) `2.9.6` (pinned exactly), used for parsing Teams message HTML.
 
+## In-app updates
+
+Choose **OpenTeams → Check for Updates…**, or **Settings → Updates**, to check the latest merged `main` revision. **Install Update…** asks before building, installing and restarting. The signed app must be installed at `/Applications/OpenTeams.app`. Checks are manual; OpenTeams does not download or install updates automatically.
+
+This updater is for locally signed installations. It requires Xcode Command Line Tools, internet access, and the existing local signing identity and pinned credential helper. It fetches the exact selected commit from this repository into a private update directory, builds and signs it on this Mac, verifies it, and uses the same guarded installer as a manual update. It never changes the development checkout. The app remains open during the build; installation stops it and restarts the installed copy. The previous app is retained under `/Applications/.OpenTeams-install.*/previous.app`; a failed final signature verification restores it. Updates retain the existing sign-in, helper and local chat data. An unsuccessful build leaves the installed app in place.
+
+The update window shows progress and failures and can reveal the log. Job state and source/build logs are retained in `~/Library/Application Support/TeamsChat/Updates`. Closing the update window or quitting the app does not cancel a running update. Only one update can install at a time. A failed or interrupted update can be retried with a new check. The build revision is embedded in `OpenTeamsSourceRevision`; this is the comparison used by the updater rather than the unchanged marketing version.
+
+Updater verification:
+
+```sh
+python3 script/test_updater_e2e.py
+swiftc -parse-as-library -swift-version 6 Sources/TeamsChat/Support/TeamsAppUpdater.swift Tests/E2E/AppUpdateCheck.swift -o /tmp/openteams-update-check
+/tmp/openteams-update-check
+```
+
+The process E2E uses temporary local Git repositories and signed miniature bundles with the existing helper. It exercises download, build, revision/signature rejection, installation/backup, failed-install rollback, concurrency and invalid-input status. Its installer destination and process-stop hook are isolated, and it does not replace or stop the installed app. The second workflow checks GitHub over the network for both an older revision and a current revision without installing. Native menu/window interactions and the real restart are separate acceptance checks.
+
 ## Security and privacy
 
 - **Credentials** live in the macOS Keychain. The app does not read them directly; a bundled XPC credential helper owns that boundary.
 - **Helper pinning** — the build and install scripts verify the helper's signing identity before staging or replacing the app, so a swapped helper is rejected.
 - **Local data** — downloaded chats, drafts, and read state live under `~/Library/Application Support/TeamsChat/` with restricted file permissions. **This cache is not encrypted.**
-- **Network** — traffic goes only to Microsoft Teams services. There is no analytics, crash reporting, or third-party endpoint. The `--telemetry` build mode streams the app's own `os_log` subsystem to your terminal, locally.
+- **Network** — chat traffic goes to Microsoft Teams services. Manual update checks contact GitHub, and installing an update fetches this repository and its build dependencies. There is no analytics or crash reporting. The `--telemetry` build mode streams the app's own `os_log` subsystem to your terminal, locally.
 
 Found a security issue? Please report it privately through GitHub's security advisory feature rather than opening a public issue.
 

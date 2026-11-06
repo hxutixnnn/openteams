@@ -18,7 +18,11 @@ extension FocusedValues {
 
 struct ChatCommands: Commands {
     @FocusedValue(\.chatActions) private var actions
+    @Environment(\.openWindow) private var openWindow
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { openWindow(id: "updates") }
+        }
         CommandMenu("Conversation") {
             Button("Find in Conversation") { actions?.search() }
                 .keyboardShortcut("f")

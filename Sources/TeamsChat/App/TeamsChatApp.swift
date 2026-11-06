@@ -88,6 +88,11 @@ struct TeamsChatApp: App {
         .defaultSize(width: 1180, height: 800)
         .commands { ChatCommands() }
 
+        Window("OpenTeams Updates", id: "updates") {
+            TeamsUpdateView()
+        }
+        .windowResizability(.contentSize)
+
         Settings {
             #if DEBUG
             if TeamsPerformanceFixtureConfiguration.enabled {
