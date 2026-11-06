@@ -175,7 +175,7 @@ private struct TeamsSidebarFocusProbe: NSViewRepresentable {
 }
 
 private struct DismissSidebarOverlayKey: EnvironmentKey {
-    static let defaultValue: (() -> Bool)? = nil
+    static var defaultValue: (() -> Bool)? { nil }
 }
 
 extension EnvironmentValues {
