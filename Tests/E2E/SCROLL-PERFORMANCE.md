@@ -17,26 +17,41 @@ python3 script/scroll_benchmark.py --skip-build --mode bounds --label my-check
 
 ## Paired results
 
-Both builds are worktrees of this branch, measured alternately in one session so that host load affects both. Baseline is `78431ba`; the change is `e365a50`. Three pairs, 2000 rich messages in the timeline.
+Three builds from this branch, measured alternately in one session so host load affects all of them, 2000 rich messages in the timeline:
+
+- `base` at `78431ba`, before the row work
+- `opt` at `e365a50`, stable rows only
+- `final` at `ee120fe`, stable rows plus the deletion-status fix
+
+Run 1:
 
 | Variant | fps | p50 ms | p95 ms | p99 ms | max ms | long frames | row bodies/s |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Baseline 1 | 79.7 | 8.5 | 30.8 | 31.7 | 46.1 | 33% | 377 |
-| Baseline 2 | 79.9 | 8.4 | 31.6 | 32.8 | 42.0 | 34% | 377 |
-| Baseline 3 | 79.7 | 8.4 | 31.1 | 32.5 | 43.6 | 34% | 378 |
-| Stable rows 1 | 96.2 | 8.4 | 23.2 | 24.6 | 29.5 | 29% | 63 |
-| Stable rows 2 | 99.4 | 8.5 | 22.6 | 24.4 | 31.5 | 25% | 63 |
-| Stable rows 3 | 98.1 | 8.5 | 22.7 | 23.6 | 27.5 | 26% | 63 |
+| base | 116.9 | 8.4 | 14.8 | 15.8 | 28.5 | 17.5% | 336 |
+| opt | 119.6 | 8.4 | 11.9 | 14.1 | 22.1 | 2.8% | 21 |
+| final | 119.6 | 8.4 | 11.4 | 12.6 | 23.2 | 1.3% | 21 |
 
-Medians: baseline 79.7 fps with p95 31.1 ms; stable rows 98.1 fps with p95 22.7 ms. Row body evaluations fall from 377/s to 63/s while about 22 distinct rows scroll into view per second, so the repeated work on unchanged rows is removed.
+Run 2:
+
+| Variant | fps | p50 ms | p95 ms | p99 ms | max ms | long frames | row bodies/s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| base | 117.5 | 8.4 | 14.8 | 15.7 | 27.0 | 17.8% | 336 |
+| opt | 119.2 | 8.4 | 10.7 | 14.6 | 17.0 | 2.8% | 21 |
+| final | 118.9 | 8.4 | 12.1 | 14.4 | 22.3 | 4.2% | 21 |
+
+Both scroll rates sit at the 120 Hz display's presentation rate, so fps cannot separate the variants; the frame budget can. Against the baseline, the final build cuts p95 from 14.8 ms to about 11.8 ms and the share of frames over 1.5 refresh periods from about 17.7 percent to about 2.8 percent, and its p99 stays inside a single 60 Hz period (16.7 ms). About 21 distinct rows scroll into view per second and each renders exactly once.
+
+An earlier session ran the same three-way comparison under heavier host load and gave the baseline 79.7-79.9 fps with p95 30.8-31.6 ms and 33-34 percent long frames, while stable rows gave 96.2-99.4 fps with p95 22.6-23.2 ms and 25-29 percent long frames. Absolute values move with host load; the ordering did not.
+
+Row body evaluations for the baseline are about 336/s against roughly 22 distinct row identities per second, so each visible row body ran about fifteen times. The final build runs each row body once.
 
 ## What the profile showed
 
-Sampling the fixture process while it scrolled showed the main thread spending about 89 percent of its time in SwiftUI layout, with `TeamsReadDetailView` in 36 percent of those samples and `TeamsMessageRow.body.getter` in 20 percent. Counting evaluations confirmed the cause: every visible row body ran about fifteen times while it stayed on screen, because the timeline handed each row new closures on every layout pass. Holding one actions object per message and comparing rows with `Equatable` collapses that to one evaluation per visible row.
+Sampling the fixture process while it scrolled showed the main thread spending about 89 percent of its time in SwiftUI layout, with `TeamsReadDetailView` in 36 percent of those samples and `TeamsMessageRow.body.getter` in 20 percent. Sampling the final build put `TeamsReadDetailView` at about 6 percent and `TeamsMessageRow.body.getter` at about 1 percent of main-thread samples. Counting evaluations confirmed the cause: every visible row body ran about fifteen times while it stayed on screen, because the timeline handed each row new closures on every layout pass. Holding one actions object per message and comparing rows with `Equatable` collapses that to one evaluation per visible row.
 
 ## Remaining gaps
 
-- A quarter to a third of frames still take 22-32 ms, so the p99 interval is above one 60 Hz period even though the median is 8.4 ms. Realizing several new rich rows at once, dominated by text layout, is the remaining cost.
+- The remaining long frames are single events of 17-28 ms, typically when several new rich rows are realized at once; text layout dominates what is left.
 - Host load was uncontrolled and the fixture has one conversation with uniform rich messages; other message shapes, images, windows sizes and scrolling speeds are unmeasured.
 - Native frame presentation, GPU time, trackpad-specific scrolling behaviour, other display refresh rates and input latency are not measured here.
 - The benchmark scrolls the timeline's scroll view directly rather than synthesising trackpad events, and it measures main-thread tick pacing rather than presented frames.
