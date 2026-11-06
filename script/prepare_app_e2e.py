@@ -14,6 +14,8 @@ parser.add_argument("--name", default="OpenTeams Performance Fixture")
 parser.add_argument("--cached-history-count", type=int, choices=[0, 200, 2000], default=0)
 parser.add_argument("--allow-fictional-send", action="store_true")
 parser.add_argument("--enable-cached-load-hold", action="store_true")
+parser.add_argument("--send-outcome", choices=["accepted", "uncertain-accepted", "uncertain-absent"], default="accepted")
+parser.add_argument("--send-delay", type=int, choices=range(0, 61), default=0)
 parser.add_argument("--skip-build", action="store_true")
 parser.add_argument("--startup-conversation", choices=["project", "planning"], default="project")
 arguments = parser.parse_args()
@@ -24,6 +26,9 @@ if arguments.allow_fictional_send and not arguments.cached_history_count:
 
 if arguments.enable_cached_load_hold and not arguments.cached_history_count:
     parser.error("--enable-cached-load-hold requires --cached-history-count")
+
+if (arguments.send_outcome != "accepted" or arguments.send_delay) and not arguments.allow_fictional_send:
+    parser.error("send outcomes/delays require --allow-fictional-send")
 
 repository = Path(__file__).resolve().parent.parent
 if not arguments.skip_build:
@@ -49,6 +54,8 @@ with (contents / "Info.plist").open("wb") as stream:
         "LSUIElement": True,
         "OpenTeamsPerformanceFixtureRoot": str(root),
         "OpenTeamsCachedHistoryCount": arguments.cached_history_count,
+        "OpenTeamsFixtureSendOutcome": arguments.send_outcome,
+        "OpenTeamsFixtureSendDelay": float(arguments.send_delay),
         "OpenTeamsFictionalSendEnabled": arguments.allow_fictional_send,
         "OpenTeamsCachedLoadHoldEnabled": arguments.enable_cached_load_hold,
         "OpenTeamsFixtureStartupConversation": arguments.startup_conversation,
@@ -58,6 +65,9 @@ manifest = {
     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repository, text=True).strip(),
     "working_tree": subprocess.check_output(["git", "status", "--porcelain"], cwd=repository, text=True),
     "cached_history_count": arguments.cached_history_count,
+    "send_outcome": arguments.send_outcome,
+    "send_delay": arguments.send_delay,
+    "send_observation": str(root / "send-observation.json"),
     "fictional_send_enabled": arguments.allow_fictional_send,
     "cached_load_hold_enabled": arguments.enable_cached_load_hold,
     "startup_conversation": arguments.startup_conversation,

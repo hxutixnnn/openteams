@@ -3,11 +3,25 @@ import Foundation
 import TeamsCore
 
 actor PerformanceFixtureTransport: HTTPTransport {
+    enum SendOutcome: String, Sendable {
+        case accepted
+        case uncertainAccepted = "uncertain-accepted"
+        case uncertainAbsent = "uncertain-absent"
+    }
+    private let sendOutcome: SendOutcome
+    private let sendDelay: Double
+    private let sendObservationURL: URL?
+    private(set) var sendAttempts = 0
+    private(set) var acceptedSends = 0
     private let allowsSend: Bool
     private var sentMessages: [String: [TeamsWebMessage]] = [:]
     private var nextSentID: Int64 = 1_800_000_010_000
     private let gate: TeamsCachedLoadGate?
-    init(allowsSend: Bool, gate: TeamsCachedLoadGate? = nil) {
+    init(allowsSend: Bool, gate: TeamsCachedLoadGate? = nil, sendOutcome: SendOutcome = .accepted,
+         sendDelay: Double = 0, sendObservationURL: URL? = nil) {
+        self.sendOutcome = sendOutcome
+        self.sendDelay = sendDelay.isFinite ? min(60, max(0, sendDelay)) : 0
+        self.sendObservationURL = sendObservationURL
         self.allowsSend = allowsSend
         self.gate = gate
     }
@@ -79,15 +93,32 @@ actor PerformanceFixtureTransport: HTTPTransport {
         let chatID = url.pathComponents.dropLast().last ?? ""
         let isSend = request.httpMethod == "POST" && ["fixture-one", "fixture-two"].contains(chatID)
             && url.path == "/api/chatsvc/fixture/v1/users/ME/conversations/" + chatID + "/messages"
-        if isSend { await gate?.post(account: account, chatID: chatID) }
+        if isSend, allowsSend {
+            sendAttempts += 1
+            try recordSend(phase: "sending", account: account, chat: chatID)
+            await gate?.post(account: account, chatID: chatID)
+        }
         do {
+            if isSend, allowsSend, sendDelay > 0 { try await Task.sleep(for: .seconds(sendDelay)) }
             let result = try response(for: request, url: url, account: account)
+            if isSend, allowsSend { try recordSend(phase: "completed", account: account, chat: chatID) }
             if isSend { await gate?.post(account: account, chatID: chatID, status: result.1.statusCode) }
             return result
         } catch {
+            if isSend, allowsSend { try recordSend(phase: "failed", account: account, chat: chatID) }
             if isSend { await gate?.post(account: account, chatID: chatID, failed: true) }
             throw error
         }
+    }
+
+    private func recordSend(phase: String, account: String, chat: String) throws {
+        guard let sendObservationURL else { return }
+        let observation: [String: TeamsWebJSONValue] = [
+            "attempts": .number(Decimal(sendAttempts)), "accepted": .number(Decimal(acceptedSends)),
+            "outcome": .string(sendOutcome.rawValue), "phase": .string(phase),
+            "account": .string(account), "chat": .string(chat)
+        ]
+        try JSONEncoder().encode(observation).write(to: sendObservationURL, options: .atomic)
     }
 
     private func response(for request: URLRequest, url: URL, account: String) throws -> (Data, HTTPURLResponse) {
@@ -130,12 +161,15 @@ actor PerformanceFixtureTransport: HTTPTransport {
             guard body["from"]?.stringValue == "8:orgid:" + account,
                   body["conversationid"]?.stringValue == chatID,
                   let content = body["content"]?.stringValue else { throw URLError(.badServerResponse) }
+            if sendOutcome == .uncertainAbsent { throw URLError(.timedOut) }
             nextSentID += 1
             let id = String(nextSentID)
             sentMessages[account + ":" + chatID, default: []].append(TeamsWebMessage(id: id, content: content,
                 messageType: body["messagetype"]?.stringValue, imDisplayName: account, from: .string("8:orgid:" + account),
                 originalArrivalTime: id, composeTime: body["composetime"]?.stringValue,
                 properties: body["properties"], clientMessageId: body["clientmessageid"]?.stringValue))
+            acceptedSends += 1
+            if sendOutcome == .uncertainAccepted { throw URLError(.timedOut) }
             status = 201
             headers["Location"] = url.absoluteString + "/" + id
             data = try JSONEncoder().encode(["OriginalArrivalTime": id])
