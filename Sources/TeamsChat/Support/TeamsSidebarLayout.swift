@@ -30,12 +30,9 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
                 detail()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.leading, docked ? sidebarWidth : 0)
-                if overlay {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture { dismissOverlay() }
-                        .accessibilityHidden(true)
-                }
+                    .simultaneousGesture(SpatialTapGesture().onEnded { event in
+                        if overlay, event.location.x > sidebarWidth { dismissOverlay() }
+                    })
                 TeamsSidebarContainer(resolve: { sidebarProbe = $0 }) {
                     sidebar()
                         .environment(\.dismissSidebarOverlay, overlay ? { dismissOverlay(); return true } : nil)
