@@ -36,12 +36,13 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
                         .onTapGesture { dismissOverlay() }
                         .accessibilityHidden(true)
                 }
-                sidebar()
-                    .environment(\.dismissSidebarOverlay, overlay ? { dismissOverlay(); return true } : nil)
+                TeamsSidebarContainer(resolve: { sidebarProbe = $0 }) {
+                    sidebar()
+                        .environment(\.dismissSidebarOverlay, overlay ? { dismissOverlay(); return true } : nil)
+                }
                     .disabled(!visible)
                     .frame(width: sidebarWidth)
                     .frame(maxHeight: .infinity)
-                    .background(TeamsSidebarFocusProbe { sidebarProbe = $0 })
                     .background(TeamsSurface.window)
                     .clipShape(RoundedRectangle(cornerRadius: overlay ? TeamsSurface.panelRadius : 0))
                     .overlay {
@@ -130,10 +131,7 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
     }
 
     private func releaseSidebarFocus() {
-        guard let window = sidebarProbe?.window, let responder = window.firstResponder as? NSView,
-              let content = window.contentView else { return }
-        let rect = content.convert(responder.bounds, from: responder)
-        if rect.midX < 260 { window.makeFirstResponder(nil) }
+        if sidebarHasKeyboardFocus { sidebarProbe?.window?.makeFirstResponder(nil) }
     }
 
     private func resetHover() {
@@ -145,8 +143,12 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
 
     private var sidebarHasKeyboardFocus: Bool {
         guard let probe = sidebarProbe, let responder = probe.window?.firstResponder as? NSView else { return false }
-        let rect = probe.convert(responder.bounds, from: responder)
-        return probe.bounds.contains(NSPoint(x: rect.midX, y: rect.midY))
+        if responder.isDescendant(of: probe) { return true }
+        if let editor = responder as? NSTextView, editor.isFieldEditor,
+           let owner = editor.delegate as? NSView {
+            return owner.isDescendant(of: probe)
+        }
+        return false
     }
 
     private func scheduleDismissal() {
@@ -164,14 +166,25 @@ struct TeamsSidebarLayout<Sidebar: View, Detail: View>: View {
     }
 }
 
-private struct TeamsSidebarFocusProbe: NSViewRepresentable {
+private struct TeamsSidebarContainer<Content: View>: NSViewRepresentable {
+    @Environment(\.self) private var environment
     let resolve: (NSView) -> Void
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
+    @ViewBuilder let content: () -> Content
+
+    func makeNSView(context: Context) -> NSHostingView<AnyView> {
+        let view = NSHostingView(rootView: root)
+        view.sizingOptions = []
         DispatchQueue.main.async { resolve(view) }
         return view
     }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    func updateNSView(_ nsView: NSHostingView<AnyView>, context: Context) {
+        nsView.rootView = root
+    }
+
+    private var root: AnyView {
+        AnyView(content().environment(\.self, environment))
+    }
 }
 
 private struct DismissSidebarOverlayKey: EnvironmentKey {
