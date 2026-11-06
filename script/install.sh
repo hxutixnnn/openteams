@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+MODE="${1:-run}"
+case "$MODE" in
+  run|--no-launch) ;;
+  *) echo "usage: $0 [--no-launch]" >&2; exit 2 ;;
+esac
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE="$ROOT_DIR/dist/OpenTeams.app"
 DEST="/Applications/OpenTeams.app"
@@ -50,7 +55,12 @@ if ! move_exclusive "$STAGE/OpenTeams.app" "$DEST"; then
   if [[ -e "$STAGE/previous.app" ]]; then move_exclusive "$STAGE/previous.app" "$DEST" || echo "Previous app remains at $STAGE/previous.app" >&2; fi
   exit 1
 fi
-validate "$DEST"
+if ! validate "$DEST"; then
+  move_exclusive "$DEST" "$STAGE/failed.app"
+  if [[ -e "$STAGE/previous.app" ]]; then move_exclusive "$STAGE/previous.app" "$DEST"; fi
+  echo "Installed app failed verification; restored the previous app when available." >&2
+  exit 1
+fi
 if [[ -e "$STAGE/previous.app" ]]; then echo "Previous app retained at $STAGE/previous.app"; fi
-/usr/bin/open -n "$DEST"
-printf 'Installed and launched %s\n' "$DEST"
+if [[ "$MODE" == "run" ]]; then /usr/bin/open -n "$DEST"; fi
+printf 'Installed %s\n' "$DEST"
