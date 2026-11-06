@@ -44,7 +44,10 @@ struct TeamsReadDetailView: View {
     private var loading: Bool { store.isLoadingConversation(chat.id) }
 
     var body: some View {
-        VStack(spacing: 0) {
+        #if DEBUG
+        TeamsBenchmarkCounters.detailBody += 1
+        #endif
+        return VStack(spacing: 0) {
             status
             timeline
             footer
@@ -186,6 +189,9 @@ struct TeamsReadDetailView: View {
                     }
                 }
                 .scrollTargetLayout()
+                #if DEBUG
+                .modifier(TeamsScrollBenchmarkTarget(ids: messages.map(\.id)))
+                #endif
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .frame(maxWidth: 800)
                 .frame(maxWidth: .infinity)

@@ -43,7 +43,10 @@ struct TeamsMessageRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        #if DEBUG
+        TeamsBenchmarkCounters.rowBody += 1
+        #endif
+        return HStack(alignment: .top, spacing: 12) {
             Group {
                 if grouped { Color.clear.accessibilityHidden(true) }
                 else { PersonAvatar(person: message.author, size: compact ? 28 : 32, revision: mediaRevision, refreshRevision: mediaRefreshRevision, loadPhoto: loadPhoto) }
@@ -286,6 +289,9 @@ struct TeamsMessageRow: View {
     }
 
     private func attributed(_ runs: [TeamsTextRun]) -> AttributedString {
+        #if DEBUG
+        TeamsBenchmarkCounters.rowText += 1
+        #endif
         var result = AttributedString()
         for run in runs {
             var value = AttributedString(run.text)
