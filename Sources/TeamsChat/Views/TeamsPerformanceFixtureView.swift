@@ -9,6 +9,15 @@ import TeamsCore
     static let startupConversation = PerformanceFixtureStartupConversation(rawValue: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureStartupConversation") as? String ?? "project") ?? .project
     static let defaults = UserDefaults(suiteName: "OpenTeams.performance-fixture." + UUID().uuidString)!
     static let appearance = TeamsPerformanceFixtureAppearanceState()
+    private static var sendInputs: [[String: Bool]] = []
+
+    static func recordSendInput(eligible: Bool, preparing: Bool, sending: Bool, closed: Bool, connected: Bool) {
+        guard let root else { return }
+        sendInputs.append(["eligible": eligible, "preparing": preparing, "sending": sending, "closed": closed, "connected": connected])
+        do {
+            try JSONEncoder().encode(sendInputs).write(to: root.appendingPathComponent("send-input.json"), options: .atomic)
+        } catch { NSLog("Fixture send input observation failed: %@", error.localizedDescription) }
+    }
     static let root: URL? = {
         guard let path = Bundle.main.object(forInfoDictionaryKey: "OpenTeamsPerformanceFixtureRoot") as? String else { return nil }
         let root = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
@@ -48,7 +57,10 @@ struct TeamsPerformanceFixtureAppearance: ViewModifier {
         transport = PerformanceFixtureTransport(allowsSend: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFictionalSendEnabled") as? Bool == true, gate: gate,
             sendOutcome: PerformanceFixtureTransport.SendOutcome(rawValue: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureSendOutcome") as? String ?? "accepted") ?? .accepted,
             sendDelay: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureSendDelay") as? Double ?? 0,
-            sendObservationURL: root.appendingPathComponent("send-observation.json"))
+            sendObservationURL: root.appendingPathComponent("send-observation.json"),
+            holdReply: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureHoldReply") as? Bool == true,
+            holdSend: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureHoldSend") as? Bool == true,
+            closedChat: Bundle.main.object(forInfoDictionaryKey: "OpenTeamsFixtureClosedChat") as? Bool == true)
         cacheRoot = root.appendingPathComponent("ReadCache")
         store = TeamsReaderStore(cacheRoot: root.appendingPathComponent("ReadCache"), transport: transport,
                                  mediaFactory: { _ in throw TeamsMediaError.unavailable })
@@ -72,12 +84,16 @@ struct TeamsPerformanceFixtureAppearance: ViewModifier {
                 }
             }
         }
+        try? await transport.recordObservation()
         await store.connect(session: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/csa/fixture")!,
             accessToken: "fictional-only-" + account, expiresAt: .distantFuture, accountID: account, tenantID: "fixture-tenant",
             displayName: account, messaging: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/chatsvc/fixture")!,
                 accessToken: "fictional-only-" + account, expiresAt: .distantFuture)))
         ready = true
     }
+
+    func releaseReply() async { await transport.releaseReply() }
+    func releaseSend() async { await transport.releaseSend() }
 
     func append() async {
         busy = true
@@ -140,6 +156,15 @@ private struct PerformanceFixtureContent: View {
                 }
                 .font(.caption).padding(8)
             }
+            HStack {
+                Button("Prepare fixture reply") {
+                    controller.store.composer.setReply(.init(messageID: "1800000000050", preview: "Context-only message 50", author: "Ada Example"), in: "fixture-one")
+                }
+                Button("Release reply") { Task { await controller.releaseReply() } }
+                Button("Release send") { Task { await controller.releaseSend() } }
+                Button("Disconnect fixture") { controller.store.disconnect() }
+                Spacer()
+            }.font(.caption).padding(.horizontal, 10).padding(.bottom, 6)
             HStack {
                 Toggle("Sample Workspace", isOn: $sampleWorkspace).toggleStyle(.button)
                 Toggle("Inline image", isOn: $inlineImage).toggleStyle(.button)
