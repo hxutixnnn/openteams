@@ -1,271 +1,128 @@
-# OpenTeams
-
-A native macOS client for Microsoft Teams chats, written in Swift 6 with SwiftUI. No Electron, no browser-tab wrapper — a real macOS app that talks to the same Teams web services the web client uses.
-
-<p>
-  <img alt="macOS 27 or later" src="https://img.shields.io/badge/macOS-27%2B-black">
-  <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-orange">
-  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
-  <img alt="Status: early preview" src="https://img.shields.io/badge/status-early%20preview-yellow">
+<p align="center">
+  <img src="assets/icon/OpenTeams-source.png" width="112" height="112" alt="OpenTeams O and people icon">
 </p>
 
-> **Unofficial project.** OpenTeams is not affiliated with, endorsed by, or supported by Microsoft. It relies on private Teams web services that can change without notice, and functionality may stop working at any time. Use it with your own account, at your own risk.
+# OpenTeams
 
-| Light | Dark |
-| :---: | :---: |
-| ![OpenTeams in light mode showing the fictional Sample Workspace](assets/screenshots/mock-workspace.png) | ![OpenTeams in dark mode showing the fictional Sample Workspace](assets/screenshots/mock-workspace-dark.png) |
-| *Sample Workspace, light* | *Sample Workspace, dark* |
+An open-source, native macOS client for Microsoft Teams chat. Built with Swift and SwiftUI, with macOS 27 navigation and controls, a rich-text composer, and local conversation history.
 
-Both screenshots show the built-in **Sample Workspace**: entirely fictional mock data, no real account, tenant, or conversation.
+[Getting started](#getting-started) · [Contributing](#contributing) · [Issues](https://github.com/hxutixnnn/OpenTeams/issues) · [MIT license](LICENSE)
 
----
+**Early preview.** OpenTeams is an independent project, unaffiliated with Microsoft. It uses private Teams web services, which may change without notice. Organization policies may prevent sign-in or use. It is not a replacement for every Microsoft Teams feature.
 
-## Contents
+## What you can do
 
-- [Why this exists](#why-this-exists)
-- [Features](#features)
-- [Not implemented or not yet verified](#not-implemented-or-not-yet-verified)
-- [Requirements](#requirements)
-- [Getting started](#getting-started)
-- [Installing into /Applications](#installing-into-applications)
-- [Usage](#usage)
-- [Building and testing](#building-and-testing)
-- [Architecture](#architecture)
-- [Security and privacy](#security-and-privacy)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+- Read chats, browse folders and unread conversations, and search downloaded messages or explicitly search Teams.
+- Compose formatted messages with mentions, links, lists and replies. Save drafts locally per account and conversation.
+- React to messages and edit or delete supported messages, with recovery controls for uncertain server outcomes.
+- Inspect participants and shared files/links; preview supported images and PDFs.
+- Read previously downloaded conversations while disconnected.
+- Explore a fictional **Sample Workspace** without a Microsoft account.
 
-## Why this exists
+Calls, meetings, file uploads, Office document previews and closed-app push notifications are not implemented. Account, tenant and service compatibility varies. Full visual/accessibility acceptance is still in progress; a successful build is not a claim of complete coverage. Fresh-account/MFA sign-in, tenant policies, guest/consumer accounts and long-running session recovery are not fully verified. Rich sending/editing and SharePoint previews have local verification only.
 
-Teams in a browser tab is memory-hungry, loses its place when you close the window, and competes with the rest of the desktop for focus. OpenTeams is a small, focused native client for the part of Teams most people live in: reading and answering chat.
+| Sample Workspace — Light | Sample Workspace — Dark |
+| --- | --- |
+| ![Fictional conversations in Light appearance](assets/screenshots/mock-workspace.png) | ![Fictional conversations in Dark appearance](assets/screenshots/mock-workspace-dark.png) |
 
-It signs in through a real Microsoft sign-in window, discovers your account, tenant, and service routes from that session, and then renders conversations with native views, native scrolling, native search fields, and native keyboard shortcuts.
-
-## Features
-
-**Conversations and history**
-
-- Account-scoped conversation list with unread state, participant avatars, and favorite/custom folders
-- Paginated message history with a stable scroll anchor across paging and refresh
-- Message rendering for formatted text, quotes, mentions, reactions, system messages, and deleted placeholders
-- Search across downloaded messages
-- Participant and conversation details inspector
-- Account switching with isolated caches, drafts, and read state
-
-**Composing**
-
-- Rich composer with bold, italics, lists, quotes, links, code, emoji, and `@` mention picking
-- Local drafts that survive conversation switches, app restarts, and crashes
-- Replies, reactions, and editing of supported messages
-- `⌘ Return` to send, with pending-send state persisted before the request leaves the app
-
-**Media**
-
-- Teams-hosted inline images
-- Previews for supported images and PDFs
-
-**Offline and recovery**
-
-- Cached conversations stay readable when disconnected
-- Read state, drafts, and cache separated per account
-- Refresh policy that retries transient failures without duplicate or ambiguous reads
-
-A **Sample Workspace** with fictional conversations ships with the app, so the UI can be explored without signing in to anything.
-
-## Not implemented or not yet verified
-
-Being honest about coverage is more useful than a longer feature list.
-
-- **Not implemented:** file uploads, Office document previews, original-file downloads, closed-app push notifications
-- **Locally verified only:** live rich sending and editing, custom group pictures, SharePoint-hosted image and PDF previews
-- **Not fully verified:** fresh-account and MFA sign-in, tenant policies, guest and consumer accounts, long-running unattended session recovery
-- **Known gap:** after a network failure the outcome of a send can be unclear; the app does not automatically retry an ambiguous send
-
-Organization policies or changes to Microsoft sign-in can block the connection entirely. That is outside this project's control.
+These screenshots contain fictional data and illustrate the sample workspace; they may lag the current UI.
 
 ## Requirements
 
-- macOS 27 or later
-- macOS 27 SDK and Swift 6.4 or later — compatible Xcode or Command Line Tools
-- A Microsoft Teams work or school account (live use only; the Sample Workspace needs no account)
+- macOS **27 or later**.
+- Swift **6.4 or later** and the **macOS 27 SDK**, provided by compatible Xcode or Command Line Tools.
+- Git and internet access to fetch source and dependencies.
+- A Microsoft Teams work or school account for live conversations. No account is needed for the sample workspace.
+
+This project currently documents building locally. Local builds use your own signing identity and are not notarized distribution binaries.
 
 ## Getting started
 
+Clone the public repository over HTTPS:
+
 ```sh
-git clone git@github.com:hxutixnnn/openteams.git
-cd openteams
+git clone https://github.com/hxutixnnn/OpenTeams.git
+cd OpenTeams
+python3 script/check_build_environment.py
 ```
 
-Set up a local signing identity and pin the credential helper. Both are **one-time** steps per installation:
+For a **fresh installation**, create a local signing identity and pin the credential helper once:
 
 ```sh
 python3 script/setup_local_signing.py
 ./script/pin_credential_helper.sh
 ```
 
-Then build, sign, and launch:
+If you already use OpenTeams, keep the existing signing identity and pinned helper. Replacing them can break access to saved credentials; do not repeat setup as a troubleshooting shortcut.
 
-```sh
-./script/build_and_run.sh
-```
-
-The build script produces and signs `dist/OpenTeams.app`, then opens it. The signing identity is a local self-signed certificate in your login Keychain; this build is **not notarized**, which is expected for a local development build.
-
-Other build modes:
-
-```sh
-./script/build_and_run.sh --build-only   # build and sign, do not launch
-./script/build_and_run.sh --debug        # launch under lldb
-./script/build_and_run.sh --logs         # launch and stream process logs
-./script/build_and_run.sh --telemetry    # launch and stream this app's os_log subsystem
-./script/build_and_run.sh --verify       # launch and verify staged app processes
-```
-
-`TEAMSCHAT_SIGNING_IDENTITY` selects the identity used to pin the helper.
-
-> **Never regenerate the credential helper over an existing installation.** Changing its identity requires a credential migration. If you already have a working install, keep the existing identity and helper and run `./script/build_and_run.sh` directly.
-
-## Installing into /Applications
+Build, sign and install:
 
 ```sh
 ./script/build_and_run.sh --build-only
 ./script/install.sh
 ```
 
-The installer verifies the app's signature and the pinned credential helper before copying. When replacing a matching installation it keeps the previous app in a hidden staging directory under `/Applications`, and it refuses to replace an unrelated app. It does not touch your sign-in or local data.
+The installer verifies signatures and the pinned helper, installs `/Applications/OpenTeams.app`, and launches it. A previous matching installation is retained for recovery. Your sign-in and local data are retained.
 
-The app keeps the legacy `dev.native.teamschat` bundle identifier, credential helper identity, Keychain service, and `~/Library/Application Support/TeamsChat` storage paths so an existing installation retains its sign-in and local data. Internal Swift module names keep their legacy names too.
+Open **Settings → Sample Workspace** to try fictional conversations. For live chat, choose **Connect to Teams** and sign in through the Microsoft-owned sign-in page. OpenTeams does not require an app registration or copying tokens from browser developer tools.
 
-The icon source is `assets/icon/OpenTeams-source.png`; run `./script/build_icon.sh` after changing it to regenerate the bundled `.icns`.
-
-## Usage
-
-1. Launch the app and choose **Connect to Teams**.
-2. Sign in with your own work or school account in the Microsoft Teams sign-in window.
-3. The app discovers your account, tenant, and service routes from that session — no browser capture, no developer session pipe.
-
-To try the UI without an account, open **Settings** and switch to the **Sample Workspace**.
+## Everyday use
 
 | Shortcut | Action |
 | --- | --- |
-| `⌘ L` | Focus the composer |
-| `⌘ Return` | Send message |
-| `⌘ F` | Search downloaded messages |
-| `⌥ ⌘ I` | Toggle details inspector |
-| `⌘ R` | Refresh conversations |
-| `⌘ ,` | Settings |
+| ⌘F | Find in the current conversation |
+| ⌘L | Focus the composer |
+| ⌘Return | Send |
+| ⌥⌘I | Toggle conversation details |
+| ⌘R | Refresh |
+| ⌘, | Settings |
 
-## Building and testing
+Return-to-send preferences for Teams and the sample workspace are separate. When a send, edit or creation has an uncertain outcome, use its status/reconciliation action before attempting it again; automatic retries could create duplicates.
 
-Build a single product without launching anything:
+**Updates:** choose **OpenTeams → Check for Updates…**. Installation requires confirmation and builds the selected merged revision locally using the same toolchain and signing identity. Update checks and installation are manual. See [development and update details](DEVELOPMENT.md#in-app-updates).
 
-```sh
-swift build --jobs 4 --product OpenTeams
-```
+## Privacy and account data
 
-Run the Swift test suite (core plus app):
+Saved credentials are held in macOS Keychain behind a signed XPC helper. Downloaded chats and drafts are stored locally under `~/Library/Application Support/TeamsChat/`, separated by account. File permissions are restricted, but the local cache is **not encrypted**.
 
-```sh
-./script/test.sh
-```
+Live chat traffic goes to Microsoft services. Update checks contact GitHub; builds fetch source and dependencies. There is no analytics or crash-reporting service. Never put tokens, sign-in captures, real message content or tenant identifiers in issues or screenshots.
 
-Run the isolated end-to-end workflows:
-
-```sh
-python3 script/test_performance_e2e.py --skip-build
-python3 script/test_fixture_deletion_e2e.py --skip-build
-./script/test_credential_prototype.sh
-./script/test_credential_service.sh
-./script/test_pinned_helper.sh
-```
-
-The E2E workflows build fictional chat histories, account-scoped temporary storage, cross-process draft recovery, and intercepted send requests. They never launch the main GUI bundle against real account data, and they measure completed store operations — not native frame rates or input-to-display latency. See [Tests/E2E/PERFORMANCE.md](Tests/E2E/PERFORMANCE.md) for paired measurements and [Tests/E2E/APP.md](Tests/E2E/APP.md) for the native app journeys.
-
-To prepare an isolated debug fixture bundle for manual UI testing:
-
-```sh
-python3 script/prepare_app_e2e.py --cached-history-count 2000
-```
-
-## Architecture
-
-`Package.swift` builds one app, one core library, and a small credential stack.
-
-| Target | Kind | Role |
-| --- | --- | --- |
-| `TeamsChat` | executable | SwiftUI app shell: window, sidebar, detail, inspector, composer, settings, notification routing, refresh coordination |
-| `TeamsCore` | library | Models, fixture store, Teams web clients, reader store, read cache, rich drafts, presentation, refresh policy |
-| `TeamsCredentialIPC` | library | XPC protocol shared by app and credential helper |
-| `TeamsCredentialBridge` | library | Client side of the credential helper connection |
-| `TeamsCredentialPersistence` | library | Keychain-backed session credential storage |
-| `TeamsCredentialService` | executable | Pinned XPC credential helper bundled into the app |
-| `TeamsCredentialPrototype`, `TeamsCredentialBridgeProof` | executables | Standalone tools that exercise and verify the credential path |
-
-Source layout:
-
-```
-Sources/TeamsChat/         App/ · Services/ · Support/ · Views/
-Sources/TeamsCore/         Models/ · Services/ · Fixtures/
-Sources/TeamsCredential*/  IPC · bridge · persistence · helper
-Tests/TeamsCoreTests/      store, cache, and presentation tests
-Tests/TeamsChatTests/      reader, reaction, timeline, and deletion tests
-Tests/E2E/                 app-core E2E workflows and performance evidence
-script/                    build, sign, install, and E2E runners
-assets/                    icon sources and screenshots
-```
-
-Only external dependency: [SwiftSoup](https://github.com/scinfu/SwiftSoup) `2.9.6` (pinned exactly), used for parsing Teams message HTML.
-
-## In-app updates
-
-Choose **OpenTeams → Check for Updates…**, or **Settings → Updates**, to check the latest merged `main` revision. **Install Update…** asks before building, installing and restarting. The signed app must be installed at `/Applications/OpenTeams.app`. Checks are manual; OpenTeams does not download or install updates automatically.
-
-This updater is for locally signed installations. It requires macOS 27, the macOS 27 SDK and Swift 6.4 or later (from compatible Command Line Tools or Xcode), internet access, and the existing local signing identity and pinned credential helper. It fetches the exact selected commit from this repository into a private update directory, builds and signs it on this Mac, verifies it, and uses the same guarded installer as a manual update. It never changes the development checkout. The app remains open during the build; installation stops it and restarts the installed copy. The previous app is retained under `/Applications/.OpenTeams-install.*/previous.app`; a failed final signature verification restores it. Updates retain the existing sign-in, helper and local chat data. An unsuccessful build leaves the installed app in place.
-
-The update window shows progress and failures and can reveal the log. Job state and source/build logs are retained in `~/Library/Application Support/TeamsChat/Updates`. Closing the update window or quitting the app does not cancel a running update. Only one update can install at a time. A failed or interrupted update can be retried with a new check. The build revision is embedded in `OpenTeamsSourceRevision`; this is the comparison used by the updater rather than the unchanged marketing version.
-
-Updater verification:
-
-```sh
-python3 script/test_updater_e2e.py
-swiftc -parse-as-library -swift-version 6 Sources/TeamsChat/Support/TeamsAppUpdater.swift Tests/E2E/AppUpdateCheck.swift -o /tmp/openteams-update-check
-/tmp/openteams-update-check
-```
-
-The process E2E uses temporary local Git repositories and signed miniature bundles with the existing helper. It exercises download, build, revision/signature rejection, installation/backup, failed-install rollback, concurrency and invalid-input status. Its installer destination and process-stop hook are isolated, and it does not replace or stop the installed app. The second workflow checks GitHub over the network for both an older revision and a current revision without installing. Native menu/window interactions and the real restart are separate acceptance checks.
-
-## Security and privacy
-
-- **Credentials** live in the macOS Keychain. The app does not read them directly; a bundled XPC credential helper owns that boundary.
-- **Helper pinning** — the build and install scripts verify the helper's signing identity before staging or replacing the app, so a swapped helper is rejected.
-- **Local data** — downloaded chats, drafts, and read state live under `~/Library/Application Support/TeamsChat/` with restricted file permissions. **This cache is not encrypted.**
-- **Network** — chat traffic goes to Microsoft Teams services. Manual update checks contact GitHub, and installing an update fetches this repository and its build dependencies. There is no analytics or crash reporting. The `--telemetry` build mode streams the app's own `os_log` subsystem to your terminal, locally.
-
-Found a security issue? Please report it privately through GitHub's security advisory feature rather than opening a public issue.
-
-## Troubleshooting
-
-| Symptom | Fix |
-| --- | --- |
-| `A stable signing identity is required` | Run `python3 script/setup_local_signing.py`, then retry the build. |
-| `The pinned credential helper is missing or invalid` | Do not regenerate it blindly. Re-run `./script/pin_credential_helper.sh` only on a fresh installation; otherwise migrate credentials deliberately. |
-| Sign-in window closes or the connection is refused | Your organization may block third-party clients. Verify the same account works in a browser on this machine. |
-| Messages fail after a network drop | Reconnect and refresh with `⌘ R`. The app does not retry an ambiguous send automatically. |
-| `swift test` cannot load testing macros | Use `./script/test.sh`, which resolves the plugin path for the Command Line Tools. |
+The legacy bundle identifier and `TeamsChat` storage directory are intentionally retained for existing installations. Report security issues privately through GitHub security advisories; exclude credentials and private message content.
 
 ## Contributing
 
-Contributions are welcome — issues, bug reports, and pull requests.
+Bug reports, documentation improvements and focused pull requests are welcome. Start with an issue for larger changes so the intended behavior can be agreed before implementation.
 
-- Open an issue before large changes so scope can be agreed first.
-- Keep changes small and focused; avoid unrelated cleanup and speculative abstractions.
-- Match the surrounding style. This codebase favors self-explanatory naming and simple structure over explanatory comments.
-- Prefer end-to-end coverage over new unit tests, and never include real account data, tokens, or tenant identifiers in tests, fixtures, or screenshots.
-- Commit messages follow conventional prefixes, for example `fix(chat): mark visible conversations as read`.
+For a useful bug report, include:
+
+1. macOS version, installed source revision (shown in Updates), and whether the issue occurs in the sample workspace.
+2. The smallest reproduction, expected result and actual result.
+3. A redacted screenshot or log, and relevant window size/appearance for UI defects.
+
+Read [AGENTS.md](AGENTS.md) and the [development guide](DEVELOPMENT.md). Keep changes focused, preserve account isolation and uncertain-operation safeguards, and use fictional data for tests. Changes go through pull requests; do not bypass protected `main`.
+
+Build and run the isolated E2E workflows:
+
+```sh
+swift build --jobs 4 --product OpenTeams
+python3 script/test_performance_e2e.py --skip-build
+python3 script/test_fixture_deletion_e2e.py --skip-build
+python3 script/test_fixture_delivery_e2e.py --skip-build
+```
+
+These workflows verify core behavior. Native rendering, scrolling, keyboard/IME, focus and accessibility require separate app-level checks; see [native E2E journeys](Tests/E2E/APP.md). Report unrun checks explicitly. Do not send real messages or delete user data to reproduce a test case.
+
+## Project layout
+
+- `Sources/TeamsChat` — SwiftUI views, AppKit editor integration, application lifecycle and updater.
+- `Sources/TeamsCore` — service clients, state, message rendering models, cache and drafts.
+- `Sources/TeamsCredential*` — credential helper and IPC boundary.
+- `Tests/E2E` — isolated workflows and native acceptance journeys.
+- `script` — environment checks, signing, build, installation and fixture preparation.
+- `assets` — app icon and fictional screenshots.
 
 ## License
 
-[MIT](LICENSE) © 2026 Nghia Nguyen
+OpenTeams is available under the [MIT License](LICENSE), including the permissions to use, modify and redistribute the software subject to its notice requirements. Copyright notices are retained in `LICENSE`. Third-party dependencies retain their own licenses.
 
-Microsoft, Microsoft Teams, and related marks are trademarks of Microsoft Corporation. This project is an independent, unofficial client and is not affiliated with or endorsed by Microsoft.
+Microsoft and Microsoft Teams are trademarks of Microsoft Corporation. The OpenTeams icon is project artwork, not a Microsoft logo. The software is provided without warranty; see the license for the full terms.
