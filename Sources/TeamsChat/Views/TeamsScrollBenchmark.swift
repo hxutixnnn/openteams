@@ -231,7 +231,7 @@ import SwiftUI
 struct TeamsScrollBenchmarkTarget: ViewModifier {
     let ids: [String]
     let markScrollIntent: () -> Void
-    @State private var driver = TeamsScrollBenchmarkDriver()
+    @ViewState<TeamsScrollBenchmarkDriver> private var driver = TeamsScrollBenchmarkDriver()
 
     @ViewBuilder func body(content: Content) -> some View {
         if TeamsScrollBenchmarkDriver.mode == "jump" {
