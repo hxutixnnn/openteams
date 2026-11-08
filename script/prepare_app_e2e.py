@@ -16,6 +16,9 @@ parser.add_argument("--allow-fictional-send", action="store_true")
 parser.add_argument("--enable-cached-load-hold", action="store_true")
 parser.add_argument("--send-outcome", choices=["accepted", "uncertain-accepted", "uncertain-absent"], default="accepted")
 parser.add_argument("--send-delay", type=int, choices=range(0, 61), default=0)
+parser.add_argument("--hold-reply", action="store_true")
+parser.add_argument("--hold-send", action="store_true")
+parser.add_argument("--closed-chat", action="store_true")
 parser.add_argument("--skip-build", action="store_true")
 parser.add_argument("--startup-conversation", choices=["project", "planning"], default="project")
 arguments = parser.parse_args()
@@ -27,7 +30,7 @@ if arguments.allow_fictional_send and not arguments.cached_history_count:
 if arguments.enable_cached_load_hold and not arguments.cached_history_count:
     parser.error("--enable-cached-load-hold requires --cached-history-count")
 
-if (arguments.send_outcome != "accepted" or arguments.send_delay) and not arguments.allow_fictional_send:
+if (arguments.send_outcome != "accepted" or arguments.send_delay or arguments.hold_reply or arguments.hold_send) and not arguments.allow_fictional_send:
     parser.error("send outcomes/delays require --allow-fictional-send")
 
 repository = Path(__file__).resolve().parent.parent
@@ -56,6 +59,9 @@ with (contents / "Info.plist").open("wb") as stream:
         "OpenTeamsCachedHistoryCount": arguments.cached_history_count,
         "OpenTeamsFixtureSendOutcome": arguments.send_outcome,
         "OpenTeamsFixtureSendDelay": float(arguments.send_delay),
+        "OpenTeamsFixtureHoldReply": arguments.hold_reply,
+        "OpenTeamsFixtureHoldSend": arguments.hold_send,
+        "OpenTeamsFixtureClosedChat": arguments.closed_chat,
         "OpenTeamsFictionalSendEnabled": arguments.allow_fictional_send,
         "OpenTeamsCachedLoadHoldEnabled": arguments.enable_cached_load_hold,
         "OpenTeamsFixtureStartupConversation": arguments.startup_conversation,
@@ -67,6 +73,10 @@ manifest = {
     "cached_history_count": arguments.cached_history_count,
     "send_outcome": arguments.send_outcome,
     "send_delay": arguments.send_delay,
+    "hold_reply": arguments.hold_reply,
+    "hold_send": arguments.hold_send,
+    "closed_chat": arguments.closed_chat,
+    "send_input_observation": str(root / "send-input.json"),
     "send_observation": str(root / "send-observation.json"),
     "fictional_send_enabled": arguments.allow_fictional_send,
     "cached_load_hold_enabled": arguments.enable_cached_load_hold,

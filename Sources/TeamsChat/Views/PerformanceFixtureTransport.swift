@@ -9,6 +9,12 @@ actor PerformanceFixtureTransport: HTTPTransport {
         case uncertainAbsent = "uncertain-absent"
     }
     private let sendOutcome: SendOutcome
+    private var holdReply: Bool
+    private var holdSend: Bool
+    private let closedChat: Bool
+    private var replyWaiters: [CheckedContinuation<Void, Never>] = []
+    private var sendWaiters: [CheckedContinuation<Void, Never>] = []
+    private(set) var replyRequests = 0
     private let sendDelay: Double
     private let sendObservationURL: URL?
     private(set) var sendAttempts = 0
@@ -18,13 +24,33 @@ actor PerformanceFixtureTransport: HTTPTransport {
     private var nextSentID: Int64 = 1_800_000_010_000
     private let gate: TeamsCachedLoadGate?
     init(allowsSend: Bool, gate: TeamsCachedLoadGate? = nil, sendOutcome: SendOutcome = .accepted,
-         sendDelay: Double = 0, sendObservationURL: URL? = nil) {
+         sendDelay: Double = 0, sendObservationURL: URL? = nil,
+         holdReply: Bool = false, holdSend: Bool = false, closedChat: Bool = false) {
+        self.holdReply = holdReply
+        self.holdSend = holdSend
+        self.closedChat = closedChat
         self.sendOutcome = sendOutcome
         self.sendDelay = sendDelay.isFinite ? min(60, max(0, sendDelay)) : 0
         self.sendObservationURL = sendObservationURL
         self.allowsSend = allowsSend
         self.gate = gate
     }
+    func releaseReply() {
+        holdReply = false
+        let waiters = replyWaiters
+        replyWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+    }
+
+    func releaseSend() {
+        holdSend = false
+        let waiters = sendWaiters
+        sendWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+    }
+
+    func recordObservation() throws { try recordSend(phase: "ready", account: "", chat: "") }
+
     func reserveSendIDs(_ messages: [TeamsWebMessage]) {
         for message in messages {
             if let id = Int64(message.id) { nextSentID = max(nextSentID, id) }
@@ -98,7 +124,13 @@ actor PerformanceFixtureTransport: HTTPTransport {
             try recordSend(phase: "sending", account: account, chat: chatID)
             await gate?.post(account: account, chatID: chatID)
         }
+        if request.httpMethod == "GET", url.path == "/api/csa/fixture/api/v1/chats/fixture-one/messages/1800000000050" {
+            replyRequests += 1
+            try recordSend(phase: "preparing-reply", account: account, chat: "fixture-one")
+            if holdReply { await withCheckedContinuation { replyWaiters.append($0) } }
+        }
         do {
+            if isSend, allowsSend, holdSend { await withCheckedContinuation { sendWaiters.append($0) } }
             if isSend, allowsSend, sendDelay > 0 { try await Task.sleep(for: .seconds(sendDelay)) }
             let result = try response(for: request, url: url, account: account)
             if isSend, allowsSend { try recordSend(phase: "completed", account: account, chat: chatID) }
@@ -115,6 +147,7 @@ actor PerformanceFixtureTransport: HTTPTransport {
         guard let sendObservationURL else { return }
         let observation: [String: TeamsWebJSONValue] = [
             "attempts": .number(Decimal(sendAttempts)), "accepted": .number(Decimal(acceptedSends)),
+            "replyRequests": .number(Decimal(replyRequests)),
             "outcome": .string(sendOutcome.rawValue), "phase": .string(phase),
             "account": .string(account), "chat": .string(chat)
         ]
@@ -131,7 +164,7 @@ actor PerformanceFixtureTransport: HTTPTransport {
         if method == "GET", url.path.hasSuffix("/chats") {
             let members: [TeamsWebMember] = [.init(mri: "8:orgid:fixture-a", displayName: "Alex Example"), .init(mri: "8:orgid:ada", displayName: "Ada Example")]
             data = try JSONEncoder().encode(TeamsWebChatPage(items: [
-                .init(id: "fixture-one", title: "Fictional project", members: members),
+                .init(id: "fixture-one", title: "Fictional project", isDisabled: closedChat, members: members),
                 .init(id: "fixture-two", title: "Fictional planning", members: members)
             ]))
         } else if method == "GET", url.path.hasSuffix("/conversationFolders") {

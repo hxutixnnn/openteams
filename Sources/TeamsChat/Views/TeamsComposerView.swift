@@ -179,7 +179,12 @@ struct TeamsComposerView: View {
     }
 
     private func send() {
-        guard store.accountScope == accountScope && store.accountRevision == accountRevision, !unavailableChat, composer.canSend(in: chat.id) else { return }
+        let eligible = store.accountScope == accountScope && store.accountRevision == accountRevision && !unavailableChat && composer.canSend(in: chat.id)
+        #if DEBUG
+        TeamsPerformanceFixtureConfiguration.recordSendInput(eligible: eligible, preparing: composer.preparing.contains(chat.id),
+            sending: composer.outgoing[chat.id]?.phase == .sending, closed: unavailableChat, connected: store.connected)
+        #endif
+        guard eligible else { return }
         Task {
             guard store.accountScope == accountScope && store.accountRevision == accountRevision else { return }
             if let id = await store.sendDraft(in: chat.id), store.accountScope == accountScope && store.accountRevision == accountRevision { sent(id) }
