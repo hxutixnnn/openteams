@@ -122,8 +122,8 @@ actor PerformanceFixtureTransport: HTTPTransport {
         if isSend, allowsSend {
             sendAttempts += 1
             try recordSend(phase: "sending", account: account, chat: chatID)
-            await gate?.post(account: account, chatID: chatID)
         }
+        if isSend { await gate?.post(account: account, chatID: chatID) }
         if request.httpMethod == "GET", url.path == "/api/csa/fixture/api/v1/chats/fixture-one/messages/1800000000050" {
             replyRequests += 1
             try recordSend(phase: "preparing-reply", account: account, chat: "fixture-one")
