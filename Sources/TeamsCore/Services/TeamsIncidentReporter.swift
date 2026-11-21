@@ -42,10 +42,18 @@ public actor TeamsIncidentReporter {
         }
     }
 
+    private static func lastHeal(_ succeeded: Bool?) -> String {
+        switch succeeded {
+        case true?: "the last attempt succeeded."
+        case false?: "the last attempt failed."
+        case nil: "it recurred after the last attempt."
+        }
+    }
+
     public static func report(for record: TeamsIncidentRecord, environment: GitHubIssueEnvironment) -> GitHubIssueReport {
         let dates = ISO8601DateFormatter()
         let healing = record.healAttempts == 0 ? "No automatic heal was attempted."
-            : "Automatic healing succeeded \(record.heals) of \(record.healAttempts) times; the last attempt \(record.lastHealSucceeded == true ? "succeeded" : "failed")."
+            : "Automatic healing succeeded \(record.heals) of \(record.healAttempts) times; \(lastHeal(record.lastHealSucceeded))"
         return GitHubIssueReport(
             title: "\(record.kind.issueTitle) in \(record.subsystem): \(record.signature)",
             summary: "OpenTeams recorded \(record.occurrences) occurrence\(record.occurrences == 1 ? "" : "s") of \(record.kind.rawValue) in \(record.subsystem) between \(dates.string(from: record.firstSeen)) and \(dates.string(from: record.lastSeen)). \(healing)",
