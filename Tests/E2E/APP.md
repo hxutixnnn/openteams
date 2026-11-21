@@ -66,3 +66,5 @@ Cached-history loading has an additional isolated preparation mode, an opt-in fi
 ## Unread divider
 
 On macOS 27, use a DEBUG app with `--timeline-fixture --unread-divider-fixture`. Verify **New messages** appears between messages 125 and 126. Let the active window mark the conversation read at the bottom, then load older messages. The divider must remain directly above message 126 in the same timeline. Click **Reopen timeline** and verify the divider is gone when the conversation starts out read.
+
+Repeat with `--unread-divider-late-fixture` added. The timeline starts out read with no divider. Scroll away from the bottom to avoid automatic marking as read, then click **Insert incoming message** to make the next chat-list refresh report it unread. Verify **New messages** appears above message 126 without reopening the timeline.

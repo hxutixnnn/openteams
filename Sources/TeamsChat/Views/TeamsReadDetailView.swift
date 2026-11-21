@@ -27,6 +27,7 @@ struct TeamsReadDetailView: View {
     @ViewState<String?> private var restoreAnchor: String? = nil
     @ViewState<Int> private var newMessageCount = 0
     @ViewState<UInt64?> private var unreadCutoff = nil
+    @ViewState<UUID?> private var unreadCutoffRetry = nil
     @ViewState<String?> private var firstUnreadMessageID = nil
     @ViewState<Bool> private var positionedInitialMessages = false
     @ViewState<Bool> private var completedInitialLoadPosition = false
@@ -66,7 +67,10 @@ struct TeamsReadDetailView: View {
             timeline
             footer
         }
-        .task(id: store.connected) {
+        .onChange(of: chat.isRead) { _, isRead in
+            if isRead == false && unreadCutoff == nil { unreadCutoffRetry = UUID() }
+        }
+        .task(id: UnreadCutoffTask(connected: store.connected, retry: unreadCutoffRetry)) {
             guard unreadCutoff == nil, let cutoff = await store.unreadCutoff(in: chat.id),
                   !Task.isCancelled, selectedChatID == chat.id, store.accountRevision == accountRevision else { return }
             unreadCutoff = cutoff
@@ -423,6 +427,11 @@ struct TeamsReadDetailView: View {
     private func resolveUnreadBoundary() {
         guard firstUnreadMessageID == nil, let unreadCutoff else { return }
         firstUnreadMessageID = store.firstUnreadMessageID(in: chat.id, after: unreadCutoff)
+    }
+
+    private struct UnreadCutoffTask: Equatable {
+        let connected: Bool
+        let retry: UUID?
     }
 
     private var unreadSeparator: some View {
