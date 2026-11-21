@@ -155,7 +155,10 @@ public final class TeamsDiagnostics {
     }
 
     public func report(_ incident: TeamsIncident) async {
-        do { onIncident?(try await log.record(incident)) }
+        do {
+            let record = try await log.record(incident)
+            onIncident?(record)
+        }
         catch { persistenceFailed = true }
     }
 

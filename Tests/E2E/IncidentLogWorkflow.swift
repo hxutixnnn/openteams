@@ -16,6 +16,10 @@ private struct SensitiveFailure: Error, CustomStringConvertible {
         let log = TeamsIncidentLog(url: url)
         expect(await log.records().isEmpty, "Missing file must start empty")
         let failure = TeamsIncident(error: TeamsWebClientError.http(status: 503, retryAfter: nil), subsystem: "chatList")!
+        let unobservedLog = TeamsIncidentLog(url: root.appending(path: "unobserved.json"))
+        let unobserved = TeamsDiagnostics(log: unobservedLog)
+        await unobserved.report(failure)
+        expect(await unobservedLog.records().first?.occurrences == 1, "Reporting without a hook must persist the incident")
         let first = try await log.record(failure)
         expect(first.fingerprint.count == 32, "Fingerprint must be a stable SHA256 hex prefix")
         let second = try await log.record(failure)
