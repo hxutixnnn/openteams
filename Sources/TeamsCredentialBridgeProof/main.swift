@@ -1,5 +1,5 @@
 import Foundation
-@testable import TeamsCredentialBridge
+import TeamsCredentialBridge
 import TeamsCredentialIPC
 import TeamsCore
 import TeamsCredentialPersistence
