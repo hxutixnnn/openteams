@@ -23,6 +23,11 @@ public struct GitHubIssueEnvironment: Sendable, Equatable {
 public struct GitHubIssueReport: Sendable, Equatable {
     public static let automaticLabels = ["auto", "bug"]
     public static let feedbackLabels = ["feedback"]
+    public static func feedback(title: String, details: String, screenshotCapturedLocally: Bool = false) -> GitHubIssueReport {
+        let note = "A screenshot was captured locally and can be attached by the reporter."
+        let summary = screenshotCapturedLocally ? note + "\n\n" + details : details
+        return GitHubIssueReport(title: title, summary: summary, environment: .current(), labels: feedbackLabels)
+    }
     public var title: String
     public var summary: String
     public var reproSteps: [String]

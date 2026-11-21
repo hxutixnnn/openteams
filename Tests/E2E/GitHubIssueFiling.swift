@@ -97,11 +97,28 @@ private func json(_ request: URLRequest) -> [String: Any] {
         let unrelated = try await client.find(fingerprint: "sync-stalled-401")
         precondition(unrelated == nil)
 
-        let feedback = try await client.create(GitHubIssueReport(title: "Feedback: sidebar", summary: "Sidebar is great", environment: environment,
-                                                                 labels: GitHubIssueReport.feedbackLabels))
-        precondition(feedback.number == 42)
-        requests = await transport.requests
-        precondition(json(requests.last!)["labels"] as! [String] == ["feedback"])
+        for screenshot in [false, true] {
+            let feedbackReport = GitHubIssueReport.feedback(title: "Feedback: sidebar", details: "Contact person@example.com token=private-value", screenshotCapturedLocally: screenshot)
+            precondition(feedbackReport.environment == .current())
+            precondition(feedbackReport.fingerprint == nil && feedbackReport.screenshotURL == nil)
+            let feedback = try await client.create(feedbackReport)
+            precondition(feedback.number == 42)
+            requests = await transport.requests
+            let request = requests.last!
+            precondition(request.httpMethod == "POST" && request.url!.path == "/repos/hxutixnnn/openteams/issues")
+            let payload = json(request)
+            precondition(payload["labels"] as! [String] == ["feedback"])
+            let body = payload["body"] as! String
+            precondition(!body.contains("openteams-fingerprint-"))
+            precondition(!body.contains("person@example.com") && !body.contains("private-value"))
+            precondition(body.contains("[REDACTED_EMAIL]") && body.contains("[REDACTED]"))
+            precondition(body.contains("A screenshot was captured locally and can be attached by the reporter.") == screenshot)
+            precondition(!body.contains("![Screenshot]") && !body.contains("file://"))
+        }
+        do {
+            _ = try await client.create(.feedback(title: " \n ", details: ""))
+            preconditionFailure("Filed empty feedback")
+        } catch GitHubIssueError.invalidReport {}
 
         let countBeforeUnconfigured = requests.count
         for token in [nil, "", "  \n", "has space"] as [String?] {
@@ -122,7 +139,7 @@ private func json(_ request: URLRequest) -> [String: Any] {
         for (status, expected) in failures {
             await transport.fail(with: status)
             do {
-                _ = try await client.create(report)
+                _ = try await client.create(.feedback(title: "Feedback", details: ""))
                 preconditionFailure("HTTP \(status) did not fail")
             } catch let error as GitHubIssueError {
                 precondition(error == expected, "HTTP \(status): \(error)")

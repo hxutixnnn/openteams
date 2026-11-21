@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ChatWindowActions {
@@ -25,6 +26,13 @@ struct ChatCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .appInfo) {
             Button("Check for Updates…") { openWindow(id: "updates") }
+        }
+        CommandGroup(after: .help) {
+            Button("Send Feedback…") {
+                if actions != nil { FeedbackView.screenshotWindow = NSApp.keyWindow }
+                openWindow(id: "feedback")
+            }
+                .keyboardShortcut("f", modifiers: [.command, .control, .option])
         }
         CommandMenu("Conversation") {
             Button("New Chat") { actions?.newChat?() }
