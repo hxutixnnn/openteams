@@ -1646,8 +1646,7 @@ public final class TeamsReaderStore {
                 if let cursor, !seen.insert(cursor).inserted { throw TeamsWebClientError.invalidPaginationToken }
                 if (known.isEmpty || reachedKnownMessage) && targets.isSubset(of: foundTargets) { break }
             } while cursor != nil && pageCount < 20
-            history.merge(histories[id]?.messages ?? [])
-            history.merge(pages)
+            history.merge((histories[id]?.messages ?? []) + pages)
             if current == generation, revision == sessionRevision {
                 let ids = Set(pages.map(\.id))
                 reactionsAwaitingRefresh = reactionsAwaitingRefresh.filter { $0.chat != id || !ids.contains($0.message) }
@@ -1680,8 +1679,7 @@ public final class TeamsReaderStore {
             guard current == generation, !Task.isCancelled else { return }
             let next = nonempty(page.messageToken)
             guard next != cursor else { throw TeamsWebClientError.invalidPaginationToken }
-            history.merge(histories[id]?.messages ?? [])
-            history.merge(page.messages)
+            history.merge((histories[id]?.messages ?? []) + page.messages)
             history.messageToken = next
             histories[id] = history
             render(id)
