@@ -1474,8 +1474,10 @@ public final class TeamsReaderStore {
             }
             guard current == generation, revision == sessionRevision else { return }
             if isReaction { reacting.remove(target) }
-            if action == "unread" { await refreshChats() }
-            else if isReaction, contextChatID == chatID, contextRawMessages.contains(where: { $0.id == messageID }) { await refreshContextReaction(chatID: chatID, messageID: messageID) }
+            if action == "unread" {
+                if let index = chatIndices[chatID] { chats[index].isRead = false }
+                await refreshChats()
+            } else if isReaction, contextChatID == chatID, contextRawMessages.contains(where: { $0.id == messageID }) { await refreshContextReaction(chatID: chatID, messageID: messageID) }
             else { await refreshConversation(chatID) }
         } catch {
             guard current == generation, revision == sessionRevision else { return }

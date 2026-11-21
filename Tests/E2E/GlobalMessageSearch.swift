@@ -15,6 +15,7 @@ private actor SearchTransport: HTTPTransport {
     private var held: CheckedContinuation<Void, Never>?
     private var waiting: CheckedContinuation<Void, Never>?
     private(set) var horizon = "1;1;0"
+    private(set) var bookmark = "0;1;0"
 
     func respond(status: Int = 200, hold: Bool = false) {
         nextStatus = status
@@ -45,13 +46,14 @@ private actor SearchTransport: HTTPTransport {
         if url.path.hasSuffix("/conversations/older-chat/properties"), request.httpMethod == "PUT",
            let body = request.httpBody {
             let fields = try JSONDecoder().decode([String: String].self, from: body)
-            guard let updated = fields["consumptionhorizon"] else { throw URLError(.unsupportedURL) }
-            horizon = updated
+            if let updated = fields["consumptionhorizon"] { horizon = updated }
+            else if let updated = fields["consumptionHorizonBookmark"] { bookmark = updated }
+            else { throw URLError(.unsupportedURL) }
             return (Data("{}".utf8), reply(url))
         }
         if url.path.hasSuffix("/conversations/older-chat") {
             let data = try JSONSerialization.data(withJSONObject: ["id": "older-chat", "properties": [
-                "consumptionhorizon": horizon, "consumptionHorizonBookmark": "0;1;0"
+                "consumptionhorizon": horizon, "consumptionHorizonBookmark": bookmark
             ]])
             return (data, reply(url))
         }
@@ -145,6 +147,13 @@ private actor SearchTransport: HTTPTransport {
         precondition(store.conversation("older-chat")?.isRead == true,
                      "Confirmed read did not clear unread state without a chat-list preview")
         print("SEARCH_CHAT_READ_OK: cleared unread state after a confirmed read without a chat-list preview")
+
+        await store.messageAction("unread", chatID: "older-chat", messageID: "1800000000002")
+        let bookmark = await transport.bookmark
+        precondition(bookmark.hasPrefix("1800000000001;") && store.serverChatSnapshot?.chats.isEmpty == true)
+        precondition(store.conversation("older-chat")?.isRead == false,
+                     "Accepted unread bookmark did not restore unread state outside the chat-list page")
+        print("SEARCH_CHAT_UNREAD_OK: restored unread state after Teams accepted the bookmark without listing the chat")
 
         await transport.respond(hold: true)
         let previousAccount = Task { try await store.searchServer("budget") }
