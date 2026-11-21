@@ -14,12 +14,18 @@ struct FeedbackView: View {
     @State private var hasToken = false
     @State private var sending = false
     @State private var error: String?
+    @State private var tokenRejected = false
+    @State private var screenshotCaptureFailed = false
     @State private var issueURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let issueURL {
                 Text("Thank you for your feedback.").font(.headline)
+                if screenshotCaptureFailed {
+                    Text("Screenshot couldn't be captured; feedback was sent without it.")
+                        .foregroundStyle(.secondary)
+                }
                 Link("View issue on GitHub", destination: issueURL)
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             } else {
@@ -39,7 +45,9 @@ struct FeedbackView: View {
                 }
                 if let error {
                     Text(error).foregroundStyle(.red).textSelection(.enabled)
-                    Button("Open Settings…") { openSettings() }
+                    if tokenRejected {
+                        Button("Open Settings…") { openSettings() }
+                    }
                 }
                 HStack {
                     if sending { ProgressView().controlSize(.small); Text("Sending…") }
@@ -65,6 +73,8 @@ struct FeedbackView: View {
     @MainActor private func send() async {
         sending = true
         error = nil
+        tokenRejected = false
+        screenshotCaptureFailed = false
         defer { sending = false }
         do {
             guard try GitHubTokenStore.load().flatMap(GitHubTokenStore.normalized) != nil else {
@@ -73,7 +83,12 @@ struct FeedbackView: View {
             }
             let screenshot: URL?
             if includeScreenshot {
-                screenshot = try await captureWindow()
+                do {
+                    screenshot = try await captureWindow()
+                } catch {
+                    screenshot = nil
+                    screenshotCaptureFailed = true
+                }
             } else {
                 screenshot = nil
             }
@@ -85,9 +100,10 @@ struct FeedbackView: View {
         } catch GitHubIssueError.notConfigured {
             hasToken = false
         } catch GitHubIssueError.unauthorized {
+            tokenRejected = true
             error = "GitHub rejected the token. Update it in Settings and try again."
         } catch {
-            self.error = "Could not send feedback. Check your connection, GitHub token permissions, and screenshot access, then try again."
+            self.error = "Could not send feedback. Check your connection and GitHub token permissions, then try again."
         }
     }
 
