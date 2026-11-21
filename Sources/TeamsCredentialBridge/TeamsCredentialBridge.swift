@@ -56,7 +56,7 @@ private final class PullEndpoint: NSObject, TeamsCredentialPull, @unchecked Send
               serviceName == "dev.native.teamschat.credential-service" else { throw TeamsCredentialBridgeError.invalidInput }
         self.certificate = certificate; self.serviceName = serviceName; self.beforePull = {}
     }
-    init(certificate: String, beforePull: @escaping @Sendable () async -> Void) throws {
+    package init(certificate: String, beforePull: @escaping @Sendable () async -> Void) throws {
         guard certificate.range(of: "^[0-9A-Fa-f]{40}$", options: .regularExpression) != nil else { throw TeamsCredentialBridgeError.invalidInput }
         self.certificate = certificate; self.serviceName = "dev.native.teamschat.credential-service"; self.beforePull = beforePull
     }
