@@ -31,7 +31,13 @@ public enum TeamsMessageEditError: Error { case storage }
 public final class TeamsReaderStore {
     public let composer: TeamsComposeStore
     @ObservationIgnored public var diagnostics: TeamsDiagnostics?
-    public private(set) var chats: [TeamsWebChat] = []
+    public private(set) var chats: [TeamsWebChat] = [] {
+        didSet {
+            let currentChats = chats
+            chatIndices = Dictionary(currentChats.indices.map { (currentChats[$0].id, $0) }, uniquingKeysWith: { first, _ in first })
+        }
+    }
+    @ObservationIgnored private var chatIndices: [String: Int] = [:]
     public private(set) var serverChatSnapshot: TeamsServerChatSnapshot?
     @ObservationIgnored public var onServerChatSnapshot: (@MainActor (TeamsServerChatSnapshot) -> Void)?
     public private(set) var conversationFolders: TeamsConversationFolders?
@@ -1464,7 +1470,9 @@ public final class TeamsReaderStore {
 
     public func conversation(_ id: String) -> TeamsWebChat? {
         if id == "48:notes" { return selfChat }
-        return chats.first { $0.id == id }
+        let currentChats = chats
+        guard let index = chatIndices[id] else { return nil }
+        return currentChats[index]
     }
 
     @discardableResult public func sendDraft(in id: String) async -> String? {
