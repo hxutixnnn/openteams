@@ -75,6 +75,9 @@ private final class Clock: @unchecked Sendable {
         try await log.recordHeal(fingerprint: healed.fingerprint, succeeded: true)
         expect(await reporter.escalate(fingerprint: healed.fingerprint) == .skipped, "Healed incident below the repeat threshold must not file")
         expect(await transport.requests.isEmpty, "Healed incident sent a request")
+        try await log.record(TeamsIncident(kind: .networkFailure, subsystem: "chatList", signature: "network"))
+        expect(await log.escalation(for: healed.fingerprint) == .file, "A fresh failure after a heal must be unhealed again")
+        try await log.recordHeal(fingerprint: healed.fingerprint, succeeded: true)
 
         let diagnostics = TeamsDiagnostics(log: log, sentinelURL: root.appending(path: "session-active"), healGracePeriod: .milliseconds(30))
         diagnostics.reporter = reporter

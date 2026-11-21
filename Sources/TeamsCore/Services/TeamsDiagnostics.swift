@@ -98,6 +98,7 @@ public actor TeamsIncidentLog {
         let record: TeamsIncidentRecord
         if let index = entries.firstIndex(where: { $0.fingerprint == incident.fingerprint }) {
             entries[index].occurrences += 1
+            entries[index].lastHealSucceeded = nil
             entries[index].firstSeen = min(entries[index].firstSeen, incident.occurredAt)
             entries[index].lastSeen = max(entries[index].lastSeen, incident.occurredAt)
             record = entries[index]
