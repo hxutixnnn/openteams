@@ -26,6 +26,9 @@ struct TeamsReadDetailView: View {
     @AppStorage("compactMessages") private var compact = false
     @ViewState<String?> private var restoreAnchor: String? = nil
     @ViewState<Int> private var newMessageCount = 0
+    @ViewState<UInt64?> private var unreadCutoff = nil
+    @ViewState<UUID?> private var unreadCutoffRetry = nil
+    @ViewState<String?> private var firstUnreadMessageID = nil
     @ViewState<Bool> private var positionedInitialMessages = false
     @ViewState<Bool> private var completedInitialLoadPosition = false
     @ViewState<Bool> private var userHasScrolled = false
@@ -63,6 +66,15 @@ struct TeamsReadDetailView: View {
             status
             timeline
             footer
+        }
+        .onChange(of: chat.isRead) { _, isRead in
+            if isRead == false && unreadCutoff == nil { unreadCutoffRetry = UUID() }
+        }
+        .task(id: UnreadCutoffTask(connected: store.connected, retry: unreadCutoffRetry)) {
+            guard unreadCutoff == nil, let cutoff = await store.unreadCutoff(in: chat.id),
+                  !Task.isCancelled, selectedChatID == chat.id, store.accountRevision == accountRevision else { return }
+            unreadCutoff = cutoff
+            resolveUnreadBoundary()
         }
         .sheet(item: $editingMessage) { edit in
             TeamsMessageEditSheet(document: Binding(get: { edit.document }, set: { edit.document = $0 }), identity: edit.id.uuidString,
@@ -200,11 +212,13 @@ struct TeamsReadDetailView: View {
                     let knownMessageIDs = Set(messages.map(\.id))
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         let accountScope = store.accountScope
+                        let startsUnread = firstUnreadMessageID == message.id
                         VStack(alignment: .leading, spacing: 0) {
                             if index == 0 || !Calendar.current.isDate(message.createdAt, inSameDayAs: messages[index - 1].createdAt) {
                                 dateSeparator(message.createdAt)
                             }
-                            TeamsMessageRow(message: message, compact: compact, grouped: isGrouped(at: index), accountID: store.accountID,
+                            if startsUnread { unreadSeparator }
+                            TeamsMessageRow(message: message, compact: compact, grouped: !startsUnread && isGrouped(at: index), accountID: store.accountID,
                                             canEdit: store.canEditMessage(in: chat.id, messageID: message.id), canReact: store.canReact(in: chat.id, messageID: message.id),
                                             mediaRevision: store.mediaRevision, mediaRefreshRevision: store.mediaRefreshRevision,
                                             actions: rowActions(for: message, knownIDs: knownMessageIDs),
@@ -306,6 +320,7 @@ struct TeamsReadDetailView: View {
                 }
             }
             .onChange(of: messages.map(\.id), initial: true) { old, new in
+                resolveUnreadBoundary()
                 guard !new.isEmpty else { return }
                 if let anchor = restoreAnchor {
                     proxy.scrollTo(anchor, anchor: .top)
@@ -407,6 +422,26 @@ struct TeamsReadDetailView: View {
             Calendar.current.isDate(current.createdAt, inSameDayAs: previous.createdAt) &&
             current.createdAt.timeIntervalSince(previous.createdAt) >= 0 &&
             current.createdAt.timeIntervalSince(previous.createdAt) < 300
+    }
+
+    private func resolveUnreadBoundary() {
+        guard firstUnreadMessageID == nil, let unreadCutoff else { return }
+        firstUnreadMessageID = store.firstUnreadMessageID(in: chat.id, after: unreadCutoff)
+    }
+
+    private struct UnreadCutoffTask: Equatable {
+        let connected: Bool
+        let retry: UUID?
+    }
+
+    private var unreadSeparator: some View {
+        HStack(spacing: 14) {
+            Rectangle().fill(.tint).frame(height: 1)
+            Text("New messages").font(.caption.weight(.semibold)).foregroundStyle(.tint).fixedSize()
+            Rectangle().fill(.tint).frame(height: 1)
+        }
+        .padding(.vertical, 8)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func dateSeparator(_ date: Date) -> some View {
