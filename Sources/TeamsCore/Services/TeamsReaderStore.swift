@@ -2016,7 +2016,7 @@ public final class TeamsReaderStore {
     private func record(_ error: any Error, chatID: String? = nil, silent: Bool = false, reconnects: Bool = false) {
         if error is CancellationError || Task.isCancelled { return }
         if let incident = TeamsIncident(error: error, subsystem: chatID == nil ? "chatList" : "conversation"), let diagnostics {
-            unhealedIncidents[chatID ?? ""] = incident.fingerprint
+            if reconnects { unhealedIncidents[chatID ?? ""] = incident.fingerprint }
             Task { await diagnostics.report(incident) }
         }
         let message = (error as? TeamsWebClientError)?.localizedDescription ?? "Teams could not complete this read. Try again."
