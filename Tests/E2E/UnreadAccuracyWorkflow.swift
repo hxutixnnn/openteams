@@ -2,16 +2,17 @@ import Foundation
 import TeamsCore
 
 private actor UnreadTransport: HTTPTransport {
-    private let original: TeamsWebMessage
+    private var recent: [TeamsWebMessage]
+    private var older: [TeamsWebMessage] = []
     private var preview: TeamsWebMessage
     private var isRead = false
-    private var horizon = "1;1;0"
-    private var bookmark = "0;1;0"
+    private var horizon: String? = "1;1;0"
+    private var bookmark: String? = "0;1;0"
     private var loseUnreadResponse = false
     private var listUnavailable = false
 
     init(_ original: TeamsWebMessage) {
-        self.original = original
+        recent = [original]
         preview = original
     }
 
@@ -23,6 +24,14 @@ private actor UnreadTransport: HTTPTransport {
 
     func setListUnavailable(_ value: Bool) { listUnavailable = value }
     func loseNextUnreadResponse() { loseUnreadResponse = true }
+    func setHistory(recent: [TeamsWebMessage], older: [TeamsWebMessage]) {
+        self.recent = recent
+        self.older = older
+    }
+    func setReadPosition(horizon: String?, bookmark: String?) {
+        self.horizon = horizon
+        self.bookmark = bookmark
+    }
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = request.url!
@@ -43,12 +52,16 @@ private actor UnreadTransport: HTTPTransport {
             body = Data()
         } else if url.path.hasSuffix("/chats") {
             status = listUnavailable ? 503 : 200
-            body = try JSONEncoder().encode(TeamsWebChatPage(items: [.init(id: "chat", isOneOnOne: true, isRead: isRead && bookmark.hasPrefix("0;"), lastMessage: preview)]))
+            body = try JSONEncoder().encode(TeamsWebChatPage(items: [.init(id: "chat", isOneOnOne: true, isRead: isRead && bookmark?.hasPrefix("0;") == true, lastMessage: preview)]))
         } else if url.path.hasSuffix("/messages") {
-            body = try JSONEncoder().encode(TeamsWebMessagePage(messages: [original]))
+            let paginating = request.value(forHTTPHeaderField: "x-ms-messageToken") == "older"
+            body = try JSONEncoder().encode(TeamsWebMessagePage(messages: paginating ? older : recent, messageToken: paginating || older.isEmpty ? nil : "older"))
         } else {
             precondition(url.path.hasSuffix("/conversations/chat"))
-            body = Data("{\"id\":\"chat\",\"properties\":{\"consumptionhorizon\":\"\(horizon)\",\"consumptionHorizonBookmark\":\"\(bookmark)\"}}".utf8)
+            var properties: [String: String] = [:]
+            properties["consumptionhorizon"] = horizon
+            properties["consumptionHorizonBookmark"] = bookmark
+            body = try JSONSerialization.data(withJSONObject: ["id": "chat", "properties": properties])
         }
         return (body, HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
     }
@@ -123,5 +136,32 @@ private actor UnreadTransport: HTTPTransport {
         }
         precondition(notifications == [incoming.id, "current", "opaque-a", "opaque-b"])
         print("UNREAD_ACCURACY_OK: confirmed read horizon, newer unread messages, explicit unread with a lost response, own messages and stale or duplicate previews")
+
+        let latest = message("103", arrival: "1800000002000")
+        let boundaryTransport = UnreadTransport(latest)
+        await boundaryTransport.setHistory(recent: [incoming, latest], older: [original])
+        await boundaryTransport.setReadPosition(horizon: "1800000000000;1;0", bookmark: nil)
+        let boundaryStore = TeamsReaderStore(cacheRoot: root.appendingPathComponent("boundary"), transport: boundaryTransport)
+        await boundaryStore.connect(session: session)
+        let openingCutoff = await boundaryStore.unreadCutoff(in: "chat")
+        precondition(openingCutoff == 1_800_000_000_000)
+        await boundaryStore.loadConversation("chat")
+        precondition(boundaryStore.firstUnreadMessageID(in: "chat", after: openingCutoff!) == nil)
+        await boundaryStore.loadOlderMessages("chat")
+        precondition(boundaryStore.firstUnreadMessageID(in: "chat", after: openingCutoff!) == incoming.id)
+        precondition(boundaryStore.firstUnreadMessageID(in: "chat", after: 1_800_000_002_000) == nil)
+
+        await boundaryTransport.setReadPosition(horizon: "1800000002000;1;0", bookmark: "1800000000999;2;102")
+        let bookmarkCutoff = await boundaryStore.unreadCutoff(in: "chat")
+        precondition(bookmarkCutoff == 1_800_000_000_999)
+        precondition(boundaryStore.firstUnreadMessageID(in: "chat", after: bookmarkCutoff!) == incoming.id)
+
+        await boundaryTransport.setReadPosition(horizon: nil, bookmark: nil)
+        let missingCutoff = await boundaryStore.unreadCutoff(in: "chat")
+        precondition(missingCutoff == nil)
+        await boundaryTransport.setReadPosition(horizon: "1800000000000;1;0", bookmark: "malformed")
+        let malformedCutoff = await boundaryStore.unreadCutoff(in: "chat")
+        precondition(malformedCutoff == nil)
+        print("UNREAD_BOUNDARY_OK: authoritative horizon and bookmark, missing or malformed state, and a boundary revealed by older history")
     }
 }

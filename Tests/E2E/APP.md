@@ -62,3 +62,7 @@ Record the commit and source hashes, bundle binary hash, temporary root, process
 Manual app E2E outcomes are distinct from performance benchmarks. Native FPS/hitch tracing, startup timings, rapid typing/IME, selection, accessibility and live-service behavior require their own evidence. If a step cannot be completed with the approved background route, report the exact step as blocked and withhold any claim that the full journey passed. Independent QA must approve the final PR commit before merge.
 
 Cached-history loading has an additional isolated preparation mode, an opt-in fictional-only send mode (default remains rejected), and a native acceptance journey in [CACHED-LOADING.md](CACHED-LOADING.md).
+
+## Unread divider
+
+On macOS 27, use a DEBUG app with `--timeline-fixture --unread-divider-fixture`. Verify **New messages** appears between messages 125 and 126. Let the active window mark the conversation read at the bottom, then load older messages. The divider must remain directly above message 126 in the same timeline. Click **Reopen timeline** and verify the divider is gone when the conversation starts out read.
