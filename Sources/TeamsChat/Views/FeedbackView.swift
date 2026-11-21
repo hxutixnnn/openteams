@@ -40,7 +40,7 @@ struct FeedbackView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if !hasToken {
-                    Text("No GitHub token is saved. Add one in Settings to send feedback.")
+                    Text("A readable GitHub token is required. Add or replace it in Settings to send feedback.")
                     Button("Open Settings…") { openSettings() }
                 }
                 if let error {
@@ -68,7 +68,7 @@ struct FeedbackView: View {
             title = ""
             details = ""
             includeScreenshot = false
-            hasToken = GitHubTokenStore.contains()
+            Task { hasToken = await GitHubTokenStore.load().flatMap(GitHubTokenStore.normalized) != nil }
             sending = false
             error = nil
             tokenRejected = false
@@ -76,7 +76,7 @@ struct FeedbackView: View {
             issueURL = nil
         }
         .onChange(of: activeState) { _, state in
-            if state != .inactive { hasToken = GitHubTokenStore.contains() }
+            if state != .inactive { Task { hasToken = await GitHubTokenStore.load().flatMap(GitHubTokenStore.normalized) != nil } }
         }
     }
 
@@ -87,7 +87,7 @@ struct FeedbackView: View {
         screenshotCaptureFailed = false
         defer { sending = false }
         do {
-            guard try GitHubTokenStore.load().flatMap(GitHubTokenStore.normalized) != nil else {
+            guard await GitHubTokenStore.load().flatMap(GitHubTokenStore.normalized) != nil else {
                 hasToken = false
                 return
             }

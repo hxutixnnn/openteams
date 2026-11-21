@@ -4,6 +4,55 @@ public protocol GitHubTokenSource: Sendable {
     func gitHubToken() async throws -> String?
 }
 
+public actor TimedGitHubTokenSource: GitHubTokenSource {
+    private let source: any GitHubTokenSource
+    private let timeout: Duration
+    private var pending: (id: UUID, task: Task<String?, Never>)?
+
+    public init(source: any GitHubTokenSource, timeout: Duration = .seconds(3)) {
+        self.source = source; self.timeout = max(.zero, timeout)
+    }
+
+    public func gitHubToken() async -> String? {
+        await withCheckedContinuation { continuation in
+            let lookup = GitHubTokenLookup(continuation)
+            let timer = Task {
+                do { try await Task.sleep(for: timeout) } catch { return }
+                await lookup.finish(nil)
+            }
+            Task {
+                await lookup.finish(await read())
+                timer.cancel()
+            }
+        }
+    }
+
+    public func reset() {
+        pending = nil
+    }
+
+    private func read() async -> String? {
+        if let pending { return await pending.task.value }
+        let id = UUID()
+        let task = Task { try? await source.gitHubToken() }
+        pending = (id, task)
+        let token = await task.value
+        if pending?.id == id { pending = nil }
+        return token
+    }
+}
+
+private actor GitHubTokenLookup {
+    private var continuation: CheckedContinuation<String?, Never>?
+
+    init(_ continuation: CheckedContinuation<String?, Never>) { self.continuation = continuation }
+
+    func finish(_ token: String?) {
+        continuation?.resume(returning: token)
+        continuation = nil
+    }
+}
+
 public struct GitHubIssueEnvironment: Sendable, Equatable {
     public var appVersion: String
     public var appRevision: String

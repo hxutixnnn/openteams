@@ -36,7 +36,10 @@ final class TeamsRefreshCoordinator {
                 guard let self, let monitor, self.pathMonitor === monitor else { return }
                 let restored = self.pathWasUnsatisfied && status == .satisfied
                 self.pathWasUnsatisfied = status == .unsatisfied
-                if restored { self.refreshNow() }
+                if restored {
+                    self.refreshNow()
+                    await self.reader.diagnostics?.retryPendingEscalations()
+                }
             }
         }
         monitor.start(queue: DispatchQueue(label: "TeamsRefreshCoordinator.network"))

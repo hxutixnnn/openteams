@@ -222,6 +222,10 @@ public final class TeamsDiagnostics {
         }
     }
 
+    public func retryPendingEscalations() async {
+        await reporter?.retryDeferred(excluding: healingFingerprints.union(escalationDeadlines.keys))
+    }
+
     public func beginSession() async {
         guard !sessionStarted else { return }
         sessionStarted = true

@@ -11,6 +11,7 @@ public actor TeamsIncidentReporter {
     private let bumpInterval: TimeInterval
     private let now: @Sendable () -> Date
     private var inFlight: Set<String> = []
+    private var deferred: Set<String> = []
     private var pausedUntil: Date?
 
     public init(log: TeamsIncidentLog, client: any GitHubIssueFiling, environment: GitHubIssueEnvironment = .current(),
@@ -20,13 +21,27 @@ public actor TeamsIncidentReporter {
     }
 
     @discardableResult public func escalate(fingerprint: String) async -> TeamsIncidentFilingOutcome {
-        let escalation = await log.escalation(for: fingerprint)
-        let record = await log.records().first { $0.fingerprint == fingerprint }
-        guard escalation != .none, let record, !inFlight.contains(fingerprint) else { return .skipped }
-        if let pausedUntil, now() < pausedUntil { return .deferred }
-        if case .bump = escalation, let last = record.lastReportedAt, now().timeIntervalSince(last) < bumpInterval { return .deferred }
+        guard !inFlight.contains(fingerprint) else { return .skipped }
         inFlight.insert(fingerprint)
         defer { inFlight.remove(fingerprint) }
+        let outcome = await file(fingerprint: fingerprint)
+        if outcome == .deferred { deferred.insert(fingerprint) }
+        else { deferred.remove(fingerprint) }
+        return outcome
+    }
+
+    public func retryDeferred(excluding fingerprints: Set<String> = []) async {
+        for fingerprint in deferred.subtracting(fingerprints) {
+            await escalate(fingerprint: fingerprint)
+        }
+    }
+
+    private func file(fingerprint: String) async -> TeamsIncidentFilingOutcome {
+        let escalation = await log.escalation(for: fingerprint)
+        let record = await log.records().first { $0.fingerprint == fingerprint }
+        guard escalation != .none, let record else { return .skipped }
+        if let pausedUntil, now() < pausedUntil { return .deferred }
+        if case .bump = escalation, let last = record.lastReportedAt, now().timeIntervalSince(last) < bumpInterval { return .deferred }
         do {
             let result = try await client.fileOrBump(Self.report(for: record, environment: environment))
             try await log.linkIssue(fingerprint: fingerprint, number: result.issue.number, reportedOccurrences: record.occurrences)

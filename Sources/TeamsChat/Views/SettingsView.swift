@@ -61,7 +61,7 @@ struct SettingsView: View {
                     Text("Fictional conversations with local sending and saved drafts.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                GitHubIssueReportingSection()
+                GitHubIssueReportingSection(diagnostics: connection.reader.diagnostics)
                     .disabled(isolated)
                 Section("Updates") {
                     Button("Check for Updates…") { openWindow(id: "updates") }
@@ -74,6 +74,7 @@ struct SettingsView: View {
 }
 
 private struct GitHubIssueReportingSection: View {
+    var diagnostics: TeamsDiagnostics?
     @ViewState<String> private var draft = ""
     @ViewState<Bool> private var saved = false
     @ViewState<String?> private var message: String?
@@ -83,11 +84,13 @@ private struct GitHubIssueReportingSection: View {
             if saved {
                 LabeledContent("GitHub token", value: "Saved in Keychain")
                 Button("Remove Token", role: .destructive) {
-                    do {
-                        try GitHubTokenStore.delete()
-                        saved = false
-                        message = nil
-                    } catch { message = "The token could not be removed from Keychain." }
+                    Task {
+                        do {
+                            try await GitHubTokenStore.delete()
+                            saved = false
+                            message = nil
+                        } catch { message = "The token could not be removed from Keychain." }
+                    }
                 }
             } else {
                 SecureField("GitHub token", text: $draft)
@@ -99,16 +102,19 @@ private struct GitHubIssueReportingSection: View {
             Text("Used only to file issues in \(GitHubIssueClient.defaultRepository). Create a fine-grained token for that repository with Issues read and write access. With a token saved, problems that automatic recovery cannot fix, or that keep repeating, are filed there automatically. Tokens, message text and personal details are removed before anything is sent.")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        .onAppear { saved = GitHubTokenStore.contains() }
+        .task { saved = await GitHubTokenStore.contains() }
     }
 
     private func save() {
         guard GitHubTokenStore.normalized(draft) != nil else { return }
-        do {
-            try GitHubTokenStore.save(draft)
-            draft = ""
-            saved = true
-            message = nil
-        } catch { message = "The token could not be saved to Keychain." }
+        Task {
+            do {
+                try await GitHubTokenStore.save(draft)
+                draft = ""
+                saved = true
+                message = nil
+                await diagnostics?.retryPendingEscalations()
+            } catch { message = "The token could not be saved to Keychain." }
+        }
     }
 }

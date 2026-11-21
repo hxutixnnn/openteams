@@ -8,6 +8,8 @@ enum GitHubTokenStoreError: Error { case invalidToken, keychain(OSStatus) }
 enum GitHubTokenStore {
     private static let service = "dev.native.teamschat.github-issues"
     private static let account = "issues-write"
+    fileprivate static let tokenSource = TimedGitHubTokenSource(source: GitHubKeychainTokenSource())
+    private static let existenceSource = TimedGitHubTokenSource(source: GitHubKeychainTokenSource(attributesOnly: true))
 
     private static var baseQuery: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
@@ -19,29 +21,30 @@ enum GitHubTokenStore {
         return trimmed
     }
 
-    static func load() throws -> String? {
+    static func load() async -> String? {
+        await tokenSource.gitHubToken()
+    }
+
+    fileprivate static func read(attributesOnly: Bool) -> String? {
         var query = baseQuery
-        query[kSecReturnData as String] = true
+        if attributesOnly { query[kSecReturnAttributes as String] = true }
+        else { query[kSecReturnData as String] = true }
         let context = LAContext()
         context.interactionNotAllowed = true
         query[kSecUseAuthenticationContext as String] = context
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess else { throw GitHubTokenStoreError.keychain(status) }
-        guard let data = result as? Data, let token = String(data: data, encoding: .utf8) else { throw GitHubTokenStoreError.invalidToken }
+        if attributesOnly { return status == errSecItemNotFound ? "absent" : "present" }
+        guard status == errSecSuccess else { return nil }
+        guard let data = result as? Data, let token = String(data: data, encoding: .utf8) else { return nil }
         return token
     }
 
-    static func contains() -> Bool {
-        var query = baseQuery
-        let context = LAContext()
-        context.interactionNotAllowed = true
-        query[kSecUseAuthenticationContext as String] = context
-        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    static func contains() async -> Bool {
+        await existenceSource.gitHubToken() != "absent"
     }
 
-    static func save(_ token: String) throws {
+    static func save(_ token: String) async throws {
         guard let token = normalized(token) else { throw GitHubTokenStoreError.invalidToken }
         let data = Data(token.utf8)
         let status = SecItemUpdate(baseQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
@@ -55,20 +58,32 @@ enum GitHubTokenStore {
         } else if status != errSecSuccess {
             throw GitHubTokenStoreError.keychain(status)
         }
+        await tokenSource.reset()
+        await existenceSource.reset()
     }
 
-    static func delete() throws {
+    static func delete() async throws {
         let status = SecItemDelete(baseQuery as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw GitHubTokenStoreError.keychain(status) }
+        await tokenSource.reset()
+        await existenceSource.reset()
     }
 }
 
 struct GitHubKeychainTokenSource: GitHubTokenSource {
-    func gitHubToken() async throws -> String? { try GitHubTokenStore.load() }
+    var attributesOnly = false
+
+    func gitHubToken() async -> String? {
+        await withCheckedContinuation { continuation in
+            Thread.detachNewThread {
+                continuation.resume(returning: GitHubTokenStore.read(attributesOnly: attributesOnly))
+            }
+        }
+    }
 }
 
 extension GitHubIssueClient {
     static func keychainBacked(transport: any HTTPTransport = TeamsWebURLSessionTransport()) -> GitHubIssueClient {
-        GitHubIssueClient(tokenSource: GitHubKeychainTokenSource(), transport: transport)
+        GitHubIssueClient(tokenSource: GitHubTokenStore.tokenSource, transport: transport)
     }
 }
