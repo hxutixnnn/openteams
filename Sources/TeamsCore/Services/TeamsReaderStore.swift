@@ -1670,7 +1670,7 @@ public final class TeamsReaderStore {
             do { try await cache.save(history, in: id) }
             catch { if current == generation, revision == sessionRevision { cacheWarning = "Messages are available for this session, but could not be saved on this Mac." } }
         } catch {
-            if current == generation && revision == sessionRevision { record(error, chatID: id) }
+            if current == generation && revision == sessionRevision { record(error, chatID: id, reconnects: true) }
         }
     }
 
@@ -1806,7 +1806,7 @@ public final class TeamsReaderStore {
             guard current == generation, revision == sessionRevision, !Task.isCancelled else { return .deferred }
             if more && nonempty(page.continuationToken) == previousCursor { throw TeamsWebClientError.invalidPaginationToken }
             let refreshedChats = page.items.map { applyingConfirmedRead(to: $0) }
-            recovered()
+            if !more { recovered() }
             let wasEmpty = chats.isEmpty
             var byID = Dictionary(chats.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
             for chat in refreshedChats {
@@ -1835,7 +1835,7 @@ public final class TeamsReaderStore {
             do { try await cache.save(.init(chats: chats, continuationToken: chatsCursor, refreshedAt: lastRefreshedAt)) }
             catch { if current == generation { cacheWarning = "Conversations could not be saved on this Mac." } }
         } catch {
-            if current == generation && revision == sessionRevision { record(error) }
+            if current == generation && revision == sessionRevision { record(error, reconnects: !more) }
         }
         return .attempted
     }
@@ -1895,14 +1895,14 @@ public final class TeamsReaderStore {
         return TeamsWebClient(session: session, transport: transport)
     }
 
-    private func record(_ error: any Error, chatID: String? = nil, silent: Bool = false) {
+    private func record(_ error: any Error, chatID: String? = nil, silent: Bool = false, reconnects: Bool = false) {
         if error is CancellationError || Task.isCancelled { return }
         if let incident = TeamsIncident(error: error, subsystem: chatID == nil ? "chatList" : "conversation"), let diagnostics { Task { await diagnostics.report(incident) } }
         let message = (error as? TeamsWebClientError)?.localizedDescription ?? "Teams could not complete this read. Try again."
         if !silent {
             if let chatID { chatErrors[chatID] = message } else { chatListError = message }
         }
-        if let chatID { transientChatIDs.remove(chatID) } else { transientChatList = false }
+        if reconnects { if let chatID { transientChatIDs.remove(chatID) } else { transientChatList = false } }
         if let failure = error as? TeamsWebClientError {
             switch failure {
             case .expiredSession, .http(status: 401, retryAfter: _):
@@ -1920,7 +1920,7 @@ public final class TeamsReaderStore {
                     guard let self, !Task.isCancelled, self.generation == current, self.retryNotBefore == deadline else { return }
                     self.retryNotBefore = nil
                 }
-            case .network, .http(status: 408, retryAfter: _), .http(status: 500...599, retryAfter: _):
+            case .network where reconnects, .http(status: 408, retryAfter: _) where reconnects, .http(status: 500...599, retryAfter: _) where reconnects:
                 isReconnecting = true
                 if let chatID { transientChatIDs.insert(chatID) } else { transientChatList = true }
                 scheduleReconnect()
@@ -1936,10 +1936,9 @@ public final class TeamsReaderStore {
     }
 
     private func recovered(chatID: String? = nil) {
-        reconnectAttempt = 0
         if let chatID { transientChatIDs.remove(chatID) } else { transientChatList = false }
         isReconnecting = transientChatList || !transientChatIDs.isEmpty
-        if !isReconnecting { reconnectTask?.cancel(); reconnectTask = nil }
+        if !isReconnecting { reconnectAttempt = 0; reconnectTask?.cancel(); reconnectTask = nil }
     }
 
     private func scheduleReconnect() {
