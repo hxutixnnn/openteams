@@ -91,8 +91,9 @@ final class TeamsRefreshCoordinator {
         refreshAccountScope = account
         if reader.connected, hasActiveWindow || notifications {
             if refreshExpectedSince == nil { refreshExpectedSince = now }
-            if let refreshExpectedSince, let lastRefreshedAt = reader.lastRefreshedAt {
-                let stalled = now.timeIntervalSince(max(lastRefreshedAt, refreshExpectedSince)) > stallThreshold
+            if let refreshExpectedSince {
+                let lastProgress = max(reader.lastRefreshedAt ?? refreshExpectedSince, refreshExpectedSince)
+                let stalled = now.timeIntervalSince(lastProgress) > stallThreshold
                 if decision.refreshLists, stalled, !reportedStall, let diagnostics = reader.diagnostics {
                     Task { await diagnostics.report(TeamsIncident(kind: .stalledSync, subsystem: "refresh", signature: "stalledSync", occurredAt: now)) }
                     reportedStall = true
