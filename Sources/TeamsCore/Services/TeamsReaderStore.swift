@@ -94,6 +94,7 @@ public final class TeamsReaderStore {
     private var sessionRevision = UUID()
     private var creatingAccounts: Set<String> = []
     private var markingRead: [String: UUID] = [:]
+    private var confirmedReadHorizons: [String: UInt64] = [:]
     private struct ReactionTarget: Hashable { let chat: String; let message: String }
     private var reacting: Set<ReactionTarget> = []
     private var reactionsAwaitingRefresh: Set<ReactionTarget> = []
@@ -743,6 +744,7 @@ public final class TeamsReaderStore {
                 guard stillCurrent() else { return }
                 report(nil)
                 readStatusMessages[chatID] = "The earlier read update was confirmed."
+                applyConfirmedRead(before, in: chatID)
                 await refreshChats()
                 if stillCurrent(), target > pending.targetHorizon {
                     readStatusMessages[chatID] = nil
@@ -772,7 +774,11 @@ public final class TeamsReaderStore {
                 report("The saved read target is newer than the available messages. Refresh before finishing.")
                 return
             }
-            if pending == nil && horizon >= target && bookmark == 0 { await refreshChats(); return }
+            if pending == nil && horizon >= target && bookmark == 0 {
+                applyConfirmedRead(before, in: chatID)
+                await refreshChats()
+                return
+            }
             let intent: TeamsPendingReadIntent
             if let pending {
                 guard let updated = try await cache.retargetPendingRead(id: pending.id, target: max(horizon, target), bookmarkRequired: bookmark > 0, minimumVersion: before.version, in: chatID) else { return }
@@ -847,6 +853,7 @@ public final class TeamsReaderStore {
             guard stillCurrent() else { return }
             report(nil)
             if visibleMessageID == nil { readStatusMessages[chatID] = "Read update confirmed." }
+            applyConfirmedRead(after, in: chatID)
             await refreshChats()
         } catch {
             guard current == generation, revision == sessionRevision, markingRead[chatID] == operation else { return }
@@ -906,6 +913,7 @@ public final class TeamsReaderStore {
             guard current == generation, revision == sessionRevision else { return }
             readStatusMessages[chatID] = "The earlier read update was confirmed."
             chatErrors[chatID] = nil
+            applyConfirmedRead(state, in: chatID)
             await refreshChats()
         } catch {
             guard current == generation, revision == sessionRevision else { return }
@@ -1387,7 +1395,9 @@ public final class TeamsReaderStore {
         do {
             switch action {
             case "delete": try await client.delete(in: chatID, message: message)
-            case "unread": try await client.markUnread(in: chatID, before: message)
+            case "unread":
+                confirmedReadHorizons.removeValue(forKey: chatID)
+                try await client.markUnread(in: chatID, before: message)
             default:
                 if action.hasPrefix("remove:") { try await client.removeReaction(String(action.dropFirst(7)), in: chatID, message: message) }
                 else { try await client.setReaction(action, in: chatID, message: message, replaceExisting: false) }
@@ -1688,6 +1698,7 @@ public final class TeamsReaderStore {
         closeMessageContext()
         generation = UUID()
         markingRead = [:]
+        confirmedReadHorizons = [:]
         mediaRevision = UUID()
         mediaRefreshRevision = UUID()
         session = nil
@@ -1741,6 +1752,37 @@ public final class TeamsReaderStore {
         } catch { if current == generation { foldersWarning = "Saved chat sections could not be read." } }
     }
 
+    private func applyConfirmedRead(_ state: TeamsReadState, in chatID: String) {
+        guard case .known(let horizon, _, _) = state.horizon else { return }
+        confirmedReadHorizons[chatID] = horizon
+        guard let index = chats.firstIndex(where: { $0.id == chatID }),
+              isCoveredByReadHorizon(chats[index], horizon: horizon) else { return }
+        chats[index].isRead = true
+    }
+
+    private func isCoveredByReadHorizon(_ chat: TeamsWebChat, horizon: UInt64) -> Bool {
+        guard let preview = chat.lastMessage else { return false }
+        let originalArrivalTime = preview.originalArrivalTime ?? historyMessage(in: chat.id, id: preview.id)?.originalArrivalTime
+        guard let arrival = TeamsChatActionsClient.arrivalMilliseconds(originalArrivalTime) else { return false }
+        return UInt64(arrival) <= horizon
+    }
+
+    private func applyingConfirmedRead(to chat: TeamsWebChat) -> TeamsWebChat {
+        guard let horizon = confirmedReadHorizons[chat.id] else { return chat }
+        if chat.isConversationDeleted == true {
+            confirmedReadHorizons.removeValue(forKey: chat.id)
+            return chat
+        }
+        guard isCoveredByReadHorizon(chat, horizon: horizon) else { return chat }
+        if chat.isRead == true {
+            confirmedReadHorizons.removeValue(forKey: chat.id)
+            return chat
+        }
+        var readChat = chat
+        readChat.isRead = true
+        return readChat
+    }
+
     private func fetchChats(more: Bool) async -> TeamsChatPageLoadResult {
         guard let client = availableClient(), !isLoadingChats, let cache else { return .deferred }
         if more && chatsCursor == nil { return .deferred }
@@ -1754,9 +1796,10 @@ public final class TeamsReaderStore {
             let page = try await client.chats(continuationToken: more ? chatsCursor : nil)
             guard current == generation, revision == sessionRevision, !Task.isCancelled else { return .deferred }
             if more && nonempty(page.continuationToken) == previousCursor { throw TeamsWebClientError.invalidPaginationToken }
+            let refreshedChats = page.items.map { applyingConfirmedRead(to: $0) }
             let wasEmpty = chats.isEmpty
             var byID = Dictionary(chats.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
-            for chat in page.items {
+            for chat in refreshedChats {
                 if let previous = byID[chat.id], chat.threadVersion != previous.threadVersion, chat.threadVersion != nil {
                     groupPictureFreshness.removeValue(forKey: chat.id)
                 }
@@ -1769,7 +1812,7 @@ public final class TeamsReaderStore {
                 return left == right ? $0.id < $1.id : left > right
             }
             if !more {
-                let snapshot = TeamsServerChatSnapshot(revision: UUID(), accountScope: accountScope, chats: page.items)
+                let snapshot = TeamsServerChatSnapshot(revision: UUID(), accountScope: accountScope, chats: refreshedChats)
                 serverChatSnapshot = snapshot
                 onServerChatSnapshot?(snapshot)
             }
