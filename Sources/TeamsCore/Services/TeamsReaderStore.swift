@@ -1601,21 +1601,18 @@ public final class TeamsReaderStore {
             guard connected else { return false }
             if subsystem == "conversation" {
                 for id in failedChatIDs where chatErrors[id] != nil { await refreshConversation(id) }
-                if failedChatIDs.allSatisfy({ chatErrors[$0] == nil }) { return true }
-            } else {
-                await refreshChats()
-                if chatListError == nil { return true }
-            }
+                if contextError != nil, let chatID = contextChatID, let targetID = contextTargetID {
+                    await openMessageContext(in: chatID, targetID: targetID)
+                }
+                if failedChatIDs.allSatisfy({ chatErrors[$0] == nil }) && contextError == nil { return true }
+            } else if await refreshListReads() { return true }
         }
         return false
     }
 
     public func resetFailedViews(in subsystem: String) async -> Bool {
         guard connected else { return false }
-        guard subsystem == "conversation" else {
-            await refreshChats()
-            return chatListError == nil
-        }
+        guard subsystem == "conversation" else { return await refreshListReads() }
         let failedChatIDs = Array(chatErrors.keys)
         for id in failedChatIDs {
             renderedMessages[id] = nil
@@ -1627,9 +1624,24 @@ public final class TeamsReaderStore {
 
     public func resync() async -> Bool {
         guard connected else { return false }
+        await settleInFlightListLoads()
         let previousRefresh = lastRefreshedAt
         await refreshChats()
         return chatListError == nil && lastRefreshedAt != previousRefresh
+    }
+
+    private func refreshListReads() async -> Bool {
+        await settleInFlightListLoads()
+        await refreshChats()
+        if foldersWarning != nil { await refreshConversationFolders() }
+        return chatListError == nil && foldersWarning == nil
+    }
+
+    private func settleInFlightListLoads(timeout: TimeInterval = 10) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while isLoadingChats || loadingFolders, Date() < deadline {
+            do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+        }
     }
 
     private func refreshGroupPictureMetadata(_ id: String) async {

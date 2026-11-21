@@ -6,6 +6,8 @@ actor FlakyTransport: HTTPTransport {
     var messageFailures: Int
     let status: Int
     var chatRequests = 0
+    var chatDelay: Duration = .zero
+    func slowChats(_ delay: Duration) { chatDelay = delay }
     init(chatFailures: Int = 0, messageFailures: Int = 0, status: Int = 503) {
         self.chatFailures = chatFailures; self.messageFailures = messageFailures; self.status = status
     }
@@ -15,6 +17,7 @@ actor FlakyTransport: HTTPTransport {
         let data: Data
         if url.path.hasSuffix("/chats") {
             chatRequests += 1
+            if chatDelay > .zero { try await Task.sleep(for: chatDelay) }
             if chatFailures > 0 { chatFailures -= 1; code = status }
             data = try JSONEncoder().encode(TeamsWebChatPage(items: [.init(id: "fixture", title: "Healing", isOneOnOne: true)]))
         } else if url.path.hasSuffix("/messages") {
@@ -120,6 +123,16 @@ actor FlakyTransport: HTTPTransport {
         expect(await broken.resync(), "Resync must succeed when the chat list refreshes")
         expect(broken.lastRefreshedAt != before, "Resync must advance the refresh time")
         broken.disconnect()
+
+        let slow = FlakyTransport()
+        let busy = store(slow, root: root)
+        await busy.connect(session: session())
+        await slow.slowChats(.milliseconds(300))
+        let scheduled = Task { await busy.refreshChats() }
+        while !busy.isLoadingChats { await Task.yield() }
+        expect(await busy.resync(), "Resync must wait for an in-flight list refresh instead of failing")
+        await scheduled.value
+        busy.disconnect()
 
         let retried = store(FlakyTransport(messageFailures: 2), root: root)
         await retried.connect(session: session())
