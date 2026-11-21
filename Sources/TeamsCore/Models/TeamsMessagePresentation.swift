@@ -230,12 +230,16 @@ public enum TeamsBodyParser {
             let fallback = messageType?.hasPrefix("ThreadActivity/") == true ? "Conversation activity" : "Message content is unavailable."
             return .init(text: fallback, blocks: [.init(runs: [.init(text: fallback)])], hasUnsupportedContent: true)
         }
-        guard let document = try? SwiftSoup.parseBodyFragment(input), let body = document.body() else {
-            return .init(text: "Message content is unavailable.", blocks: [], hasUnsupportedContent: true)
-        }
         var parser = BodyTraversal()
         parser.unsupported = truncated
-        for node in body.getChildNodes() { parser.visit(node, style: .init(text: "")) }
+        if input.utf8.contains(where: { $0 == 0 || $0 == 38 || $0 == 60 }) || input.unicodeScalars.contains("\u{ffff}") {
+            guard let document = try? SwiftSoup.parseBodyFragment(input), let body = document.body() else {
+                return .init(text: "Message content is unavailable.", blocks: [], hasUnsupportedContent: true)
+            }
+            for node in body.getChildNodes() { parser.visit(node, style: .init(text: "")) }
+        } else {
+            parser.visit(TextNode(input, nil), style: .init(text: ""))
+        }
         parser.flush()
         let blocks = parser.blocks
         let text = blocks.map(\.text).joined(separator: "\n")
