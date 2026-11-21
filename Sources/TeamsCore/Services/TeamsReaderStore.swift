@@ -1394,17 +1394,16 @@ public final class TeamsReaderStore {
         do {
             switch action {
             case "delete": try await client.delete(in: chatID, message: message)
-            case "unread": try await client.markUnread(in: chatID, before: message)
+            case "unread":
+                confirmedReadHorizons.removeValue(forKey: chatID)
+                try await client.markUnread(in: chatID, before: message)
             default:
                 if action.hasPrefix("remove:") { try await client.removeReaction(String(action.dropFirst(7)), in: chatID, message: message) }
                 else { try await client.setReaction(action, in: chatID, message: message, replaceExisting: false) }
             }
             guard current == generation, revision == sessionRevision else { return }
             if isReaction { reacting.remove(target) }
-            if action == "unread" {
-                confirmedReadHorizons.removeValue(forKey: chatID)
-                await refreshChats()
-            }
+            if action == "unread" { await refreshChats() }
             else if isReaction, contextChatID == chatID, contextRawMessages.contains(where: { $0.id == messageID }) { await refreshContextReaction(chatID: chatID, messageID: messageID) }
             else { await refreshConversation(chatID) }
         } catch {

@@ -6,6 +6,8 @@ private actor UnreadTransport: HTTPTransport {
     private var preview: TeamsWebMessage
     private var isRead = false
     private var horizon = "1;1;0"
+    private var bookmark = "0;1;0"
+    private var loseUnreadResponse = false
     private var listUnavailable = false
 
     init(_ original: TeamsWebMessage) {
@@ -16,30 +18,37 @@ private actor UnreadTransport: HTTPTransport {
     func show(_ message: TeamsWebMessage, isRead: Bool = false) {
         preview = message
         self.isRead = isRead
+        if isRead { bookmark = "0;1;0" }
     }
 
     func setListUnavailable(_ value: Bool) { listUnavailable = value }
+    func loseNextUnreadResponse() { loseUnreadResponse = true }
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = request.url!
         let body: Data
         var status = 200
         if request.httpMethod == "PUT" {
+            let values = try JSONDecoder().decode([String: String].self, from: request.httpBody!)
             if url.query == "name=consumptionhorizon" {
-                let values = try JSONDecoder().decode([String: String].self, from: request.httpBody!)
                 horizon = values["consumptionhorizon"]!
             } else {
                 precondition(url.query == "name=consumptionHorizonBookmark")
+                bookmark = values["consumptionHorizonBookmark"]!
+                if loseUnreadResponse {
+                    loseUnreadResponse = false
+                    throw URLError(.networkConnectionLost)
+                }
             }
             body = Data()
         } else if url.path.hasSuffix("/chats") {
             status = listUnavailable ? 503 : 200
-            body = try JSONEncoder().encode(TeamsWebChatPage(items: [.init(id: "chat", isOneOnOne: true, isRead: isRead, lastMessage: preview)]))
+            body = try JSONEncoder().encode(TeamsWebChatPage(items: [.init(id: "chat", isOneOnOne: true, isRead: isRead && bookmark.hasPrefix("0;"), lastMessage: preview)]))
         } else if url.path.hasSuffix("/messages") {
             body = try JSONEncoder().encode(TeamsWebMessagePage(messages: [original]))
         } else {
             precondition(url.path.hasSuffix("/conversations/chat"))
-            body = Data("{\"id\":\"chat\",\"properties\":{\"consumptionhorizon\":\"\(horizon)\"}}".utf8)
+            body = Data("{\"id\":\"chat\",\"properties\":{\"consumptionhorizon\":\"\(horizon)\",\"consumptionHorizonBookmark\":\"\(bookmark)\"}}".utf8)
         }
         return (body, HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
     }
@@ -86,6 +95,15 @@ private actor UnreadTransport: HTTPTransport {
         await store.messageAction("unread", chatID: "chat", messageID: original.id)
         precondition(store.conversation("chat")?.isRead == false && notifications == [incoming.id])
 
+        await store.markConversationRead("chat")
+        precondition(store.conversation("chat")?.isRead == true)
+        await transport.show(atHorizon, isRead: true)
+        await transport.loseNextUnreadResponse()
+        await store.messageAction("unread", chatID: "chat", messageID: original.id)
+        precondition(store.chatErrors["chat"]?.hasPrefix("The action may have succeeded") == true)
+        await store.refreshChats()
+        precondition(store.conversation("chat")?.isRead == false && notifications == [incoming.id])
+
         await transport.show(message("own", arrival: "1800000002000", sender: "https://example.invalid/8:ORGID:FIXTURE"))
         await store.refreshChats()
         let alreadyRead = message("read", arrival: "1800000003000")
@@ -104,6 +122,6 @@ private actor UnreadTransport: HTTPTransport {
             await store.refreshChats()
         }
         precondition(notifications == [incoming.id, "current", "opaque-a", "opaque-b"])
-        print("UNREAD_ACCURACY_OK: confirmed read horizon, newer unread messages, explicit unread, own messages and stale or duplicate previews")
+        print("UNREAD_ACCURACY_OK: confirmed read horizon, newer unread messages, explicit unread with a lost response, own messages and stale or duplicate previews")
     }
 }
