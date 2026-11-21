@@ -98,6 +98,16 @@ The process E2E uses temporary local Git repositories and signed miniature bundl
 3. Merge into the default branch, `main`. GitHub's closing keyword auto-closes the linked issue at merge, not when a user installs. The merge also makes the new `main` revision visible to the updater on its next check; no release tag or separate publication is needed. This is availability, not automatic delivery.
 4. The user chooses **OpenTeams → Check for Updates…** (or **Settings → Updates**), then **Install Update… → Install and Restart**. The updater fetches the selected revision, builds/signs locally and installs it. After restart, open **Updates** and confirm the **Installed** version/build and short revision match the shipped `main` commit (which may differ from the PR's pre-merge commit). If needed, read `/Applications/OpenTeams.app/Contents/Info.plist` with the same commands above for the full revision. Issue closure records the merge; this installed metadata confirms the fix reached that Mac.
 
+## Issue reporting
+
+Paste a GitHub token once in **Settings → Issue Reporting**. It is stored in the login Keychain (service `dev.native.teamschat.github-issues`) and never shown again; **Remove Token** deletes it. Use a fine-grained token scoped to `hxutixnnn/openteams` with **Issues: Read and write** only. No token is kept in source or app bundles.
+
+`GitHubIssueClient` in `TeamsCore` creates, finds and bumps issues through the GitHub REST API. Every title, summary, step, error, stack and comment passes through `GitHubIssueRedactor`, which removes tokens and authorization values, JWTs, URL query strings, Teams conversation and user IDs, emails, GUIDs, home folder names, phone numbers, message `content`/display-name JSON fields, and any caller-supplied values such as message text or names. A report with a `fingerprint` carries a visible `openteams-fingerprint-…` line; `fileOrBump` comments on the open issue with that line instead of filing a duplicate. Callers depend on the `GitHubIssueFiling` protocol, and the client takes any `GitHubTokenSource` and API base URL, so a hosted relay can replace the personal token later without changing callers.
+
+```sh
+python3 script/test_performance_e2e.py --skip-build --scenario GitHubIssueFiling
+```
+
 ## Troubleshooting
 
 | Symptom | Fix |
