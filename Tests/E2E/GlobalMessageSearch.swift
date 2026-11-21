@@ -14,6 +14,7 @@ private actor SearchTransport: HTTPTransport {
     private var holdNext = false
     private var held: CheckedContinuation<Void, Never>?
     private var waiting: CheckedContinuation<Void, Never>?
+    private(set) var horizon = "1;1;0"
 
     func respond(status: Int = 200, hold: Bool = false) {
         nextStatus = status
@@ -35,11 +36,24 @@ private actor SearchTransport: HTTPTransport {
             return (Data("{\"items\":[]}".utf8), reply(url))
         }
         if url.path.hasSuffix("/chats/older-chat") {
-            return (Data(#"{"id":"older-chat","title":"Older chat"}"#.utf8), reply(url))
+            return (Data(#"{"id":"older-chat","title":"Older chat","isRead":false}"#.utf8), reply(url))
         }
         if url.path.hasSuffix("/chats/older-chat/messages") {
             let message = TeamsWebMessage(id: "1800000000002", content: "Second match", messageType: "Text", originalArrivalTime: "1800000000002")
             return (try JSONEncoder().encode(TeamsWebMessagePage(messages: [message])), reply(url))
+        }
+        if url.path.hasSuffix("/conversations/older-chat/properties"), request.httpMethod == "PUT",
+           let body = request.httpBody {
+            let fields = try JSONDecoder().decode([String: String].self, from: body)
+            guard let updated = fields["consumptionhorizon"] else { throw URLError(.unsupportedURL) }
+            horizon = updated
+            return (Data("{}".utf8), reply(url))
+        }
+        if url.path.hasSuffix("/conversations/older-chat") {
+            let data = try JSONSerialization.data(withJSONObject: ["id": "older-chat", "properties": [
+                "consumptionhorizon": horizon, "consumptionHorizonBookmark": "0;1;0"
+            ]])
+            return (data, reply(url))
         }
         guard request.httpMethod == "POST", url.host == "substrate.office.com", url.path == "/search/api/v2/query",
               let body = request.httpBody,
@@ -84,6 +98,7 @@ private actor SearchTransport: HTTPTransport {
     private static func session(_ account: String, searchAccount: String? = nil) -> TeamsWebSession {
         .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/csa/fixture")!, accessToken: "fixture", expiresAt: .distantFuture,
               accountID: account, tenantID: tenant, displayName: "Fixture",
+              messaging: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/chatsvc/fixture")!, accessToken: "fixture", expiresAt: .distantFuture),
               searchSession: .init(accessToken: "fixture", expiresAt: .distantFuture, accountID: searchAccount ?? account, tenantID: tenant))
     }
 
@@ -121,6 +136,15 @@ private actor SearchTransport: HTTPTransport {
         await offline.loadConversation("older-chat")
         precondition(offline.messages(in: "older-chat").last?.id == "1800000000002")
         print("SEARCH_CHAT_OFFLINE_OK: restored the chat and its history without a chat-list refresh")
+
+        precondition(store.conversation("older-chat")?.isRead == false && store.conversation("older-chat")?.lastMessage == nil)
+        await store.markConversationRead("older-chat")
+        let horizon = await transport.horizon
+        precondition(horizon.hasPrefix("1800000000002;") && store.readStatusMessages["older-chat"] == "Read update confirmed.")
+        precondition(store.serverChatSnapshot?.chats.isEmpty == true)
+        precondition(store.conversation("older-chat")?.isRead == true,
+                     "Confirmed read did not clear unread state without a chat-list preview")
+        print("SEARCH_CHAT_READ_OK: cleared unread state after a confirmed read without a chat-list preview")
 
         await transport.respond(hold: true)
         let previousAccount = Task { try await store.searchServer("budget") }

@@ -1830,13 +1830,13 @@ public final class TeamsReaderStore {
         guard case .known(let horizon, _, _) = state.horizon else { return }
         confirmedReadHorizons[chatID] = horizon
         guard let index = chats.firstIndex(where: { $0.id == chatID }),
-              isCoveredByReadHorizon(chats[index], horizon: horizon) else { return }
+              isCoveredByReadHorizon(chats[index], horizon: horizon, fallback: histories[chatID]?.messages.last) else { return }
         chats[index].isRead = true
     }
 
-    private func isCoveredByReadHorizon(_ chat: TeamsWebChat, horizon: UInt64) -> Bool {
-        guard let preview = chat.lastMessage else { return false }
-        let originalArrivalTime = preview.originalArrivalTime ?? historyMessage(in: chat.id, id: preview.id)?.originalArrivalTime
+    private func isCoveredByReadHorizon(_ chat: TeamsWebChat, horizon: UInt64, fallback: TeamsWebMessage? = nil) -> Bool {
+        guard let latest = chat.lastMessage ?? fallback else { return false }
+        let originalArrivalTime = latest.originalArrivalTime ?? historyMessage(in: chat.id, id: latest.id)?.originalArrivalTime
         guard let arrival = TeamsChatActionsClient.arrivalMilliseconds(originalArrivalTime) else { return false }
         return UInt64(arrival) <= horizon
     }
