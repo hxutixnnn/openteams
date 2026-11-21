@@ -6,7 +6,8 @@ import TeamsCore
 
 private actor TimelineFixtureTransport: HTTPTransport {
     private var newest = 130
-    private var readHorizon = "1;1;0"
+    private let showsUnreadDivider = ProcessInfo.processInfo.arguments.contains("--unread-divider-fixture")
+    private lazy var readHorizon = showsUnreadDivider ? "1800000125000;1;0" : "1;1;0"
     private var readBookmark = "0;2;0"
     private var held: CheckedContinuation<Void, Never>?
     private var holdInitial = ProcessInfo.processInfo.arguments.contains("--timeline-fixture-cached")
@@ -47,7 +48,12 @@ private actor TimelineFixtureTransport: HTTPTransport {
                 return TeamsWebMessage(id: String(id), content: content, messageType: (id == 125 || id == 126 || id == 110) ? "RichText/Html" : "Text", imDisplayName: "Fixture author", originalArrivalTime: String(1_800_000_000_000 + id * 1_000), version: "1")
             }
             payload = try JSONEncoder().encode(TeamsWebMessagePage(messages: messages, messageToken: older ? nil : "older"))
-        } else { payload = try JSONEncoder().encode(TeamsWebChatPage(items: [.init(id: "fixture", title: "Timeline fixture")])) }
+        } else {
+            let horizon = UInt64(readHorizon.split(separator: ";").first ?? "") ?? 0
+            let startsRead = ProcessInfo.processInfo.arguments.contains("--unread-divider-late-fixture") && newest == 130
+            let isRead: Bool? = showsUnreadDivider ? startsRead || horizon >= UInt64(1_800_000_000_000 + newest * 1_000) : nil
+            payload = try JSONEncoder().encode(TeamsWebChatPage(items: [.init(id: "fixture", title: "Timeline fixture", isRead: isRead)]))
+        }
         return (payload, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
     }
 }
@@ -109,7 +115,11 @@ private func fixtureToken(_ claims: [String: Any]) -> String {
         await store.connect(session: session)
         await store.loadConversation("fixture")
     }
-    func append() async { await transport.appendMessage(); await store.refreshConversation("fixture") }
+    func append() async {
+        await transport.appendMessage()
+        if ProcessInfo.processInfo.arguments.contains("--unread-divider-late-fixture") { await store.refreshChats() }
+        await store.refreshConversation("fixture")
+    }
 }
 
 struct TeamsTimelineFixtureView: View {
@@ -141,8 +151,12 @@ struct TeamsTimelineFixtureView: View {
                     TeamsReadSidebar(store: controller.store, selection: $sidebarSelection, filter: $sidebarFilter, connect: {}, newChat: {})
                         .frame(width: 280)
                 }
-                TeamsReadDetailView(store: controller.store, chat: .init(id: "fixture", title: "Timeline fixture", members: [.init(mri: "8:orgid:cccccccc-cccc-cccc-cccc-cccccccccccc", displayName: "Fixture Person")]), accountScope: controller.store.accountScope, accountRevision: controller.store.accountRevision, selectedChatID: .constant("fixture"), jumpToMessage: $jump, connect: {}, focusRequest: UUID())
-                    .id(timelineID)
+                if ProcessInfo.processInfo.arguments.contains("--unread-divider-fixture"), controller.store.conversation("fixture") == nil {
+                    ProgressView()
+                } else {
+                    TeamsReadDetailView(store: controller.store, chat: .init(id: "fixture", title: "Timeline fixture", isRead: controller.store.conversation("fixture")?.isRead, members: [.init(mri: "8:orgid:cccccccc-cccc-cccc-cccc-cccccccccccc", displayName: "Fixture Person")]), accountScope: controller.store.accountScope, accountRevision: controller.store.accountRevision, selectedChatID: .constant("fixture"), jumpToMessage: $jump, connect: {}, focusRequest: UUID())
+                        .id(timelineID)
+                }
                 if ProcessInfo.processInfo.arguments.contains("--timeline-observer-diagnostics") {
                     ScrollView { VStack { ForEach(0..<30) { Text("Inspector fixture \($0)") } } }.frame(width: 160)
                 }

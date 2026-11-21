@@ -648,6 +648,33 @@ public final class TeamsReaderStore {
         }
     }
 
+    public func unreadCutoff(in chatID: String) async -> UInt64? {
+        guard conversation(chatID)?.isRead == false, availableClient() != nil, let session else { return nil }
+        let current = generation, revision = sessionRevision
+        guard let state = try? await TeamsReadStateClient(session: session, transport: transport).state(in: chatID),
+              !Task.isCancelled, connected, generation == current, sessionRevision == revision,
+              case .known(let horizon, _, _) = state.horizon else { return nil }
+        switch state.bookmark {
+        case .unset: return horizon
+        case .known(let bookmark, _, _): return bookmark == 0 ? horizon : min(horizon, bookmark)
+        case .absent, .malformed: return nil
+        }
+    }
+
+    public func firstUnreadMessageID(in chatID: String, after cutoff: UInt64) -> String? {
+        guard let messages = histories[chatID]?.messages else { return nil }
+        var previousWasRead = false
+        for message in messages {
+            guard let arrival = TeamsChatActionsClient.arrivalMilliseconds(message.originalArrivalTime) else {
+                previousWasRead = false
+                continue
+            }
+            if UInt64(arrival) > cutoff { return previousWasRead ? message.id : nil }
+            previousWasRead = true
+        }
+        return nil
+    }
+
     public func markConversationRead(_ chatID: String) async { await performMarkConversationRead(chatID, finishKnownPartial: false) }
     public func finishMarkConversationRead(_ chatID: String) async { await performMarkConversationRead(chatID, finishKnownPartial: true) }
     public func markVisibleConversationRead(_ chatID: String, messageID: String) async {
