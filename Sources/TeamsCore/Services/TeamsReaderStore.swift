@@ -580,7 +580,16 @@ public final class TeamsReaderStore {
         try Task.checkCancellation()
         guard connected, accountScope == expectedAccount, accountRevision == expectedRevision else { throw CancellationError() }
         if conversation(id) == nil {
+            let current = generation, revision = sessionRevision
             try await refreshChatMetadata(id, expectedAccount: expectedAccount, expectedRevision: expectedRevision, includeDeleted: false)
+            guard current == generation, revision == sessionRevision, !Task.isCancelled else { throw CancellationError() }
+            if let cache {
+                do { try await cache.save(.init(chats: chats, continuationToken: chatsCursor, refreshedAt: lastRefreshedAt)) }
+                catch {
+                    if current == generation, revision == sessionRevision { cacheWarning = "Conversations could not be saved on this Mac." }
+                }
+            }
+            guard current == generation, revision == sessionRevision, !Task.isCancelled else { throw CancellationError() }
         }
         guard let chat = conversation(id), chat.isConversationDeleted != true else { throw TeamsSearchError.invalidChatID }
     }

@@ -37,6 +37,10 @@ private actor SearchTransport: HTTPTransport {
         if url.path.hasSuffix("/chats/older-chat") {
             return (Data(#"{"id":"older-chat","title":"Older chat"}"#.utf8), reply(url))
         }
+        if url.path.hasSuffix("/chats/older-chat/messages") {
+            let message = TeamsWebMessage(id: "1800000000002", content: "Second match", messageType: "Text", originalArrivalTime: "1800000000002")
+            return (try JSONEncoder().encode(TeamsWebMessagePage(messages: [message])), reply(url))
+        }
         guard request.httpMethod == "POST", url.host == "substrate.office.com", url.path == "/search/api/v2/query",
               let body = request.httpBody,
               let root = try JSONSerialization.jsonObject(with: body) as? [String: Any],
@@ -108,6 +112,15 @@ private actor SearchTransport: HTTPTransport {
         let originalRevision = store.accountRevision, originalScope = store.accountScope
         try await store.resolveSearchChat("older-chat", expectedAccount: originalScope, expectedRevision: originalRevision)
         precondition(store.conversation("older-chat")?.title == "Older chat")
+        await store.loadConversation("older-chat")
+        precondition(store.messages(in: "older-chat").last?.id == "1800000000002")
+        let offline = TeamsReaderStore(cacheRoot: root, transport: transport)
+        await offline.restoreAccount(accountID: accountA, tenantID: tenant, displayName: "Fixture")
+        precondition(!offline.connected && offline.conversation("older-chat")?.title == "Older chat",
+                     "Offline restore did not list the chat opened from search")
+        await offline.loadConversation("older-chat")
+        precondition(offline.messages(in: "older-chat").last?.id == "1800000000002")
+        print("SEARCH_CHAT_OFFLINE_OK: restored the chat and its history without a chat-list refresh")
 
         await transport.respond(hold: true)
         let previousAccount = Task { try await store.searchServer("budget") }
