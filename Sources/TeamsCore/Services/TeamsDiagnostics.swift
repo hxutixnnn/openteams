@@ -186,13 +186,14 @@ public final class TeamsDiagnostics {
         if healer != nil { healingFingerprints.insert(fingerprint) }
         defer { if healer != nil { healingFingerprints.remove(fingerprint) } }
         do {
+            let healedBefore = await log.records().first { $0.fingerprint == fingerprint }?.lastHealSucceeded == true
             var record = try await log.record(incident)
             if let healer {
                 let healed = await healer(incident)
                 record = try await log.recordHeal(fingerprint: fingerprint, succeeded: healed) ?? record
             }
             onIncident?(record)
-            scheduleEscalation(record.fingerprint, after: healGracePeriod)
+            scheduleEscalation(record.fingerprint, after: healGracePeriod, restart: healedBefore)
         }
         catch { persistenceFailed = true }
     }
@@ -203,14 +204,14 @@ public final class TeamsDiagnostics {
         if !succeeded { scheduleEscalation(fingerprint, after: .zero) }
     }
 
-    private func scheduleEscalation(_ fingerprint: String, after delay: Duration) {
+    private func scheduleEscalation(_ fingerprint: String, after delay: Duration, restart: Bool = false) {
         guard let reporter else { return }
         guard delay > .zero else {
             Task { await reporter.escalate(fingerprint: fingerprint) }
             return
         }
         let waiting = escalationDeadlines[fingerprint] != nil
-        escalationDeadlines[fingerprint] = .now + delay
+        if !waiting || restart { escalationDeadlines[fingerprint] = .now + delay }
         guard !waiting else { return }
         Task { [weak self] in
             while let deadline = self?.escalationDeadlines[fingerprint], deadline > .now {

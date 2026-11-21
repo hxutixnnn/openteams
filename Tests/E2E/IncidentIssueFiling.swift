@@ -120,6 +120,16 @@ private final class Clock: @unchecked Sendable {
         await graceful.recordHeal(fingerprint: flaky.fingerprint, succeeded: true)
         try await Task.sleep(for: .milliseconds(100))
         expect(await transport.requests.count == quiet, "A recurrence healed inside its window must not file")
+        let pollingTransport = IssueTransport()
+        let pollingLog = TeamsIncidentLog(url: root.appending(path: "polling.json"))
+        let polling = TeamsDiagnostics(log: pollingLog, sentinelURL: root.appending(path: "session-active"), healGracePeriod: .milliseconds(100))
+        polling.reporter = TeamsIncidentReporter(log: pollingLog, client: GitHubIssueClient(tokenSource: Token(value: "github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz"), transport: pollingTransport), environment: environment)
+        let persistent = TeamsIncident(kind: .stalledSync, subsystem: "chatFolders", signature: "http 500")
+        for _ in 0..<3 {
+            await polling.report(persistent)
+            try await Task.sleep(for: .milliseconds(60))
+        }
+        expect(await pollingTransport.requests.count == 2, "An unhealed failure that keeps repeating must file within its first window")
         let relaunched = TeamsIncidentReporter(log: TeamsIncidentLog(url: root.appending(path: "incidents.json"), now: { clock.now }), client: client,
                                                environment: environment, bumpInterval: 3600, now: { clock.now })
         expect(await relaunched.escalate(fingerprint: incident.fingerprint) == .deferred, "A relaunch must keep the bump cooldown")
