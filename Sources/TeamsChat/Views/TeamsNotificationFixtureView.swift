@@ -11,8 +11,18 @@ private actor NotificationFixtureTransport: HTTPTransport {
         let data: Data
         if path.hasSuffix("/conversationFolders") {
             data = try JSONEncoder().encode(TeamsConversationFolders(conversationFolders: [], conversationFolderOrder: [], isPartialResponse: false))
+        } else if path.hasSuffix("/conversations/fixture-b/messages/epochTimeStamp/201") {
+            data = try JSONSerialization.data(withJSONObject: ["messages": [
+                ["id": "201", "content": "Fixture B · context-only notification", "messagetype": "Text"]
+            ]])
         } else if path.hasSuffix("/messages") {
-            data = try JSONEncoder().encode(TeamsWebMessagePage(messages: [.init(id: "101", content: "Synthetic message", messageType: "Text")]))
+            let isA = path.hasSuffix("/chats/fixture-a/messages")
+            let messages = (1...45).map { index in
+                let title = isA ? "Fixture A" : "Fixture B"
+                return TeamsWebMessage(id: String((isA ? 100 : 200) + index), content: "\(title) · message \(index)", messageType: "Text",
+                                       originalArrivalTime: String(1_800_000_000_000 + index * 1_000))
+            }.filter { $0.id != "201" }
+            data = try JSONEncoder().encode(TeamsWebMessagePage(messages: messages))
         } else {
             chatReads += 1
             data = try JSONEncoder().encode(TeamsWebChatPage(items: [.init(id: "fixture-a", title: "Fixture A"), .init(id: "fixture-b", title: "Fixture B")]))
@@ -39,7 +49,8 @@ private actor NotificationFixtureTransport: HTTPTransport {
     }
     func start() async {
         guard !started else { return }; started = true; coordinator.start()
-        let session = TeamsWebSession(baseURL: URL(string: "https://teams.cloud.microsoft/api/csa/fixture")!, accessToken: "fixture", expiresAt: .distantFuture, accountID: "fixture-account", tenantID: "fixture-tenant", displayName: "Fixture")
+        let session = TeamsWebSession(baseURL: URL(string: "https://teams.cloud.microsoft/api/csa/fixture")!, accessToken: "fixture", expiresAt: .distantFuture, accountID: "fixture-account", tenantID: "fixture-tenant", displayName: "Fixture",
+                                      messaging: .init(baseURL: URL(string: "https://teams.cloud.microsoft/api/chatsvc/amer")!, accessToken: "fixture", expiresAt: .distantFuture))
         await store.connect(session: session)
     }
     func reads() async -> Int { await transport.chatReads }
@@ -48,12 +59,12 @@ private actor NotificationFixtureTransport: HTTPTransport {
             try? await Task.sleep(for: .seconds(8))
             readsBeforeReopen = await transport.chatReads
             noWindowBeforeReopen = !coordinator.hasWindows
-            guard let destination = TeamsNotificationDestination(accountScope: store.accountScope, chatID: "fixture-b", messageID: "101") else { return }
+            guard let destination = TeamsNotificationDestination(accountScope: store.accountScope, chatID: "fixture-b", messageID: "205") else { return }
             delegate.deliver(destination, requestID: "fixture-notification")
         }
     }
-    func simulateNow(delegate: AppDelegate) {
-        guard let destination = TeamsNotificationDestination(accountScope: store.accountScope, chatID: "fixture-b", messageID: "101") else { return }
+    func simulateNow(delegate: AppDelegate, chatID: String, messageID: String) {
+        guard let destination = TeamsNotificationDestination(accountScope: store.accountScope, chatID: chatID, messageID: messageID) else { return }
         delegate.deliver(destination, requestID: UUID().uuidString)
     }
 }
@@ -65,11 +76,14 @@ struct TeamsNotificationFixtureView: View {
     @ViewState<Int> private var reads = 0
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            VStack(alignment: .leading) {
                 Text("Local notification fixture · chat reads: \(reads) · before reopen: \(controller.readsBeforeReopen) · no window: \(controller.noWindowBeforeReopen)")
-                Spacer()
-                Button("Simulate now") { controller.simulateNow(delegate: appDelegate) }
-                Button("Simulate after close") { controller.simulateAfterClose(delegate: appDelegate) }
+                HStack {
+                    Button("Notify for A · message 5") { controller.simulateNow(delegate: appDelegate, chatID: "fixture-a", messageID: "105") }
+                    Button("Notify for B · message 5") { controller.simulateNow(delegate: appDelegate, chatID: "fixture-b", messageID: "205") }
+                    Button("Notify for B · context only") { controller.simulateNow(delegate: appDelegate, chatID: "fixture-b", messageID: "201") }
+                    Button("Simulate after close") { controller.simulateAfterClose(delegate: appDelegate) }
+                }
             }.padding(8)
             TeamsReadContentView(store: controller.store, refreshCoordinator: controller.coordinator, notificationRouter: appDelegate.notificationRouter, connect: {}, persistSelection: false)
         }
