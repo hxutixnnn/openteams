@@ -2,7 +2,7 @@ import Foundation
 
 public enum TeamsChatListPresentation {
     public static func preview(for chat: TeamsWebChat, accountID: String) -> String? {
-        guard let message = chat.lastMessage, let content = message.content, !content.isEmpty else { return nil }
+        guard let message = chat.lastMessage, !TeamsRenderedMessage.isDeleted(message), let content = message.content, !content.isEmpty else { return nil }
         let type = (message.messageType ?? message.contentType ?? "").lowercased()
         guard type == "text" || type == "richtext" || type == "richtext/html" else { return nil }
         let body = TeamsBodyParser.parse(content, messageType: type == "text" ? "Text" : "RichText/Html")

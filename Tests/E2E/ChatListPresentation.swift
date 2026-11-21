@@ -19,6 +19,8 @@ import TeamsCore
             precondition(TeamsChatListPresentation.preview(for: chat, accountID: "ada") == nil)
         }
         precondition(TeamsChatListPresentation.preview(for: .init(id: "missing"), accountID: "ada") == nil)
+        let deleted = TeamsWebMessage(id: "deleted", content: "Secret", messageType: "RichText/Html", properties: .object(["deletetime": .string("1800000000000")]))
+        precondition(TeamsChatListPresentation.preview(for: .init(id: "deleted", lastMessage: deleted), accountID: "ada") == nil)
         let plain = TeamsWebChat(id: "plain", isOneOnOne: true, lastMessage: .init(id: "plain", content: "Hi\n there", messageType: "Text"))
         precondition(TeamsChatListPresentation.preview(for: plain, accountID: "ada") == "Hi there")
 
