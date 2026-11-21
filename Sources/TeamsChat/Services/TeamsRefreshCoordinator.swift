@@ -82,6 +82,11 @@ final class TeamsRefreshCoordinator {
         for (center, observer) in observers { center.removeObserver(observer) }
         observers = []; reader.onServerChatSnapshot = nil
     }
+    func restart() {
+        guard loop != nil else { return }
+        stop()
+        start()
+    }
     func reset() { TeamsNotifications.reset(); policy.reset(); refreshExpectedSince = nil; reportedStall = false }
     func refreshNow() { policy.forceMaintenance(); tick() }
     private func received(_ snapshot: TeamsServerChatSnapshot) {

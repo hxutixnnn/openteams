@@ -39,8 +39,10 @@ struct TeamsChatApp: App {
            let bridge = try? TeamsCredentialBridge(certificate: fingerprint) {
             access = TeamsHelperCredentialAccess(bridge: bridge)
         } else { access = TeamsUnavailableCredentialAccess() }
-        _connection = ViewState(initialValue: TeamsConnection(reader: reader, credentialStore: access,
-            defaults: isolated ? UserDefaults(suiteName: "OpenTeams.fixture." + UUID().uuidString)! : .standard))
+        let connection = TeamsConnection(reader: reader, credentialStore: access,
+            defaults: isolated ? UserDefaults(suiteName: "OpenTeams.fixture." + UUID().uuidString)! : .standard)
+        connection.installHealers(on: diagnostics)
+        _connection = ViewState(initialValue: connection)
         appDelegate.diagnostics = diagnostics
     }
 

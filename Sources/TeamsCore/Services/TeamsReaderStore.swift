@@ -1594,6 +1594,44 @@ public final class TeamsReaderStore {
     public func refreshChats() async { _ = await fetchChats(more: false) }
     @discardableResult public func loadMoreChats() async -> TeamsChatPageLoadResult { await fetchChats(more: true) }
 
+    public func retryFailedReads(in subsystem: String, delays: [TimeInterval] = [1, 2, 4]) async -> Bool {
+        let failedChatIDs = Array(chatErrors.keys)
+        for delay in delays {
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return false }
+            guard connected else { return false }
+            if subsystem == "conversation" {
+                for id in failedChatIDs where chatErrors[id] != nil { await refreshConversation(id) }
+                if failedChatIDs.allSatisfy({ chatErrors[$0] == nil }) { return true }
+            } else {
+                await refreshChats()
+                if chatListError == nil { return true }
+            }
+        }
+        return false
+    }
+
+    public func resetFailedViews(in subsystem: String) async -> Bool {
+        guard connected else { return false }
+        guard subsystem == "conversation" else {
+            await refreshChats()
+            return chatListError == nil
+        }
+        let failedChatIDs = Array(chatErrors.keys)
+        for id in failedChatIDs {
+            renderedMessages[id] = nil
+            renderingInputs[id] = nil
+            await loadConversation(id)
+        }
+        return failedChatIDs.allSatisfy { chatErrors[$0] == nil && renderedMessages[$0] != nil }
+    }
+
+    public func resync() async -> Bool {
+        guard connected else { return false }
+        let previousRefresh = lastRefreshedAt
+        await refreshChats()
+        return chatListError == nil && lastRefreshedAt != previousRefresh
+    }
+
     private func refreshGroupPictureMetadata(_ id: String) async {
         guard connected, mediaClient != nil, let chat = conversation(id), id != "48:notes", chat.isOneOnOne != true,
               !groupPictureListMetadata.contains(id), groupPictureLookups[id] == nil, let client = availableClient() else { return }
