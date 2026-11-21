@@ -222,7 +222,7 @@ public struct TeamsWebChat: Codable, Identifiable, Hashable, Sendable {
     public let chatType: String?
     public let threadType: String?
     public let isOneOnOne: Bool?
-    public let isRead: Bool?
+    public internal(set) var isRead: Bool?
     public let hidden: Bool?
     public let isConversationDeleted: Bool?
     public let isDisabled: Bool?
