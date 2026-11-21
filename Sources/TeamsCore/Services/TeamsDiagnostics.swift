@@ -172,7 +172,7 @@ public final class TeamsDiagnostics {
     private let sentinelURL: URL
     private let healGracePeriod: Duration
     private var sessionStarted = false
-    private var pendingEscalations: [String: Task<Void, Never>] = [:]
+    private var escalationDeadlines: [String: ContinuousClock.Instant] = [:]
 
     public init(log: TeamsIncidentLog = TeamsIncidentLog(), sentinelURL: URL = TeamsIncidentLog.defaultURL.deletingLastPathComponent().appending(path: "session-active"),
                 healGracePeriod: Duration = .seconds(120)) {
@@ -205,13 +205,19 @@ public final class TeamsDiagnostics {
 
     private func scheduleEscalation(_ fingerprint: String, after delay: Duration) {
         guard let reporter else { return }
-        if delay > .zero, pendingEscalations[fingerprint] != nil { return }
-        pendingEscalations[fingerprint] = Task { [weak self] in
-            if delay > .zero {
-                do { try await Task.sleep(for: delay) } catch { return }
+        guard delay > .zero else {
+            Task { await reporter.escalate(fingerprint: fingerprint) }
+            return
+        }
+        let waiting = escalationDeadlines[fingerprint] != nil
+        escalationDeadlines[fingerprint] = .now + delay
+        guard !waiting else { return }
+        Task { [weak self] in
+            while let deadline = self?.escalationDeadlines[fingerprint], deadline > .now {
+                do { try await Task.sleep(until: deadline) } catch { return }
             }
+            self?.escalationDeadlines[fingerprint] = nil
             await reporter.escalate(fingerprint: fingerprint)
-            self?.pendingEscalations[fingerprint] = nil
         }
     }
 

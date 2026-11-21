@@ -105,6 +105,19 @@ private final class Clock: @unchecked Sendable {
         try await Task.sleep(for: .milliseconds(150))
         expect(await transport.requests.count == 2, "A repeat inside the bump interval must not comment again")
         expect(await log.escalation(for: incident.fingerprint) == .bump(42), "Throttled repeat must stay pending")
+        let graceful = TeamsDiagnostics(log: log, sentinelURL: root.appending(path: "session-active"), healGracePeriod: .milliseconds(80))
+        graceful.reporter = reporter
+        let flaky = TeamsIncident(kind: .networkFailure, subsystem: "chatList", signature: "network -1001")
+        let quiet = await transport.requests.count
+        await graceful.report(flaky)
+        await graceful.recordHeal(fingerprint: flaky.fingerprint, succeeded: true)
+        try await Task.sleep(for: .milliseconds(50))
+        await graceful.report(flaky)
+        try await Task.sleep(for: .milliseconds(50))
+        expect(await transport.requests.count == quiet, "A recurrence must get its own heal window")
+        await graceful.recordHeal(fingerprint: flaky.fingerprint, succeeded: true)
+        try await Task.sleep(for: .milliseconds(100))
+        expect(await transport.requests.count == quiet, "A recurrence healed inside its window must not file")
         let relaunched = TeamsIncidentReporter(log: TeamsIncidentLog(url: root.appending(path: "incidents.json"), now: { clock.now }), client: client,
                                                environment: environment, bumpInterval: 3600, now: { clock.now })
         expect(await relaunched.escalate(fingerprint: incident.fingerprint) == .deferred, "A relaunch must keep the bump cooldown")
