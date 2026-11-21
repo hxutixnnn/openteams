@@ -46,7 +46,7 @@ struct TeamsReadContentView: View {
                              selection: Binding(get: { selectedID }, set: { selectedID = $0 ?? "" }),
                              filter: $conversationFilter, connect: connect,
                              newChat: { newChatPresentation = .init(account: store.accountScope, revision: store.accountRevision) },
-                             searchSubmission: chatSearchSubmission)
+                             searchSubmission: chatSearchSubmission, openSearchResult: openSearchResult)
                 .navigationTitle("Chats")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
@@ -187,10 +187,10 @@ struct TeamsReadContentView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            ConversationSearchField(text: $conversationFilter, focus: chatSearchFocus, accessibilityName: "Search loaded chats",
-                                    submit: { chatSearchSubmission = UUID() }, placeholder: "Search loaded chats", focusOnAppear: false)
+            ConversationSearchField(text: $conversationFilter, focus: chatSearchFocus, accessibilityName: "Search Teams",
+                                    submit: { chatSearchSubmission = UUID() }, placeholder: "Search Teams", focusOnAppear: false)
                 .frame(minWidth: 140, idealWidth: 220, maxWidth: 260)
-                .help("Search loaded chats (⌥⌘F)")
+                .help("Search Teams (⌥⌘F)")
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Button(action: openSearch) { Label("Find in Conversation", systemImage: "magnifyingglass") }
@@ -265,10 +265,22 @@ struct TeamsReadContentView: View {
             }
             return
         }
-        selectionAccount = destination.accountScope
-        selectedID = destination.chatID
-        jumpToMessage = .init(messageID: destination.messageID, chatID: destination.chatID, accountScope: destination.accountScope,
-                              notificationAccountRevision: store.accountRevision)
+        openMessage(destination.messageID, in: destination.chatID, account: destination.accountScope, revision: store.accountRevision)
+    }
+
+    private func openSearchResult(_ chatID: String, _ messageID: String, _ revision: UUID) async throws {
+        let account = store.accountScope
+        try await store.resolveSearchChat(chatID, expectedAccount: account, expectedRevision: revision)
+        try Task.checkCancellation()
+        guard store.accountRevision == revision, store.accountScope == account, store.connected else { throw CancellationError() }
+        conversationFilter = ""
+        openMessage(messageID, in: chatID, account: account, revision: revision)
+    }
+
+    private func openMessage(_ messageID: String, in chatID: String, account: String, revision: UUID) {
+        selectionAccount = account
+        selectedID = chatID
+        jumpToMessage = .init(messageID: messageID, chatID: chatID, accountScope: account, initialLoadAccountRevision: revision)
     }
 }
 

@@ -28,9 +28,11 @@ Tien granted foreground handling for the earlier PR #2/#4 Delete question at 19:
 
 Use the standard performance fixture on macOS 27. Wait for Account A and `Fictional project`, then exercise the production toolbar and commands:
 
-1. Hide the sidebar. Focus the composer, press **⌥⌘F**, and type `pLaNnInG`. Verify the window toolbar's **Search loaded chats** field receives the characters, the sidebar shows only **Fictional planning**, and the composer remains unchanged.
-2. Press **Return**. Verify **Fictional planning** opens. Enter a query with no matches and verify the sidebar shows an empty result without changing the selected chat. Clear the search field and verify the normal sidebar sections return.
+1. Hide the sidebar. Focus the composer, press **⌥⌘F**, and type `pLaNnInG`. Verify the window toolbar's **Search Teams** field receives the characters, **Fictional planning** is the only loaded chat match, and the composer remains unchanged.
+2. Press **Return**. Verify **Fictional planning** opens when Teams message search is unavailable. Enter a query with no matches and verify the sidebar reports no matching loaded chats without changing the selected chat. Clear the search field and verify the normal sidebar sections return.
 3. Press **⌘F** from the conversation. Verify the inspector search gets focus and the toolbar query stays empty. If two fixture windows are available, verify **⌥⌘F** and typing leave the other window's search and selection unchanged.
+
+For server search, use a macOS 27 test account with Teams message search available and a phrase present in two chats. Type it with **⌥⌘F** and verify only the loaded chat list filters until submission. Press **Return** or click **Search Teams Messages**; verify message results appear separately and **Load more messages** appends the next page if offered. Click a match in another chat and verify it opens the specific message; a match outside loaded history should open the message-context sheet. Edit the query and verify old results disappear.
 
 ## E2E-2: row actions after refresh and paging
 

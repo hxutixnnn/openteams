@@ -7,7 +7,7 @@ import tempfile
 
 parser = argparse.ArgumentParser(description="Run isolated core workflows and benchmarks. These do not replace app-level E2E verification.")
 parser.add_argument("--skip-build", action="store_true")
-parser.add_argument("--scenario", choices=["AutomaticReadWorkflow", "UnreadAccuracyWorkflow", "ChatListPresentation", "ComposerPersistence", "ComposerWorkload", "LoadingInteractions", "CachedConversationLoading", "CachedLoadWorkflows", "SendDuringCachedLoad", "CachedLoadHold", "FixtureStartupConversation", "IncidentLogWorkflow", "GitHubIssueFiling", "HistoryMergeWorkload", "NetworkRecovery", "TextFragmentLoading", "TimestampLabelLoading", "ConversationLookup", "CacheDigestLoading"])
+parser.add_argument("--scenario", choices=["AutomaticReadWorkflow", "UnreadAccuracyWorkflow", "ChatListPresentation", "ComposerPersistence", "ComposerWorkload", "LoadingInteractions", "CachedConversationLoading", "CachedLoadWorkflows", "SendDuringCachedLoad", "CachedLoadHold", "FixtureStartupConversation", "IncidentLogWorkflow", "GitHubIssueFiling", "GlobalMessageSearch", "HistoryMergeWorkload", "NetworkRecovery", "TextFragmentLoading", "TimestampLabelLoading", "ConversationLookup", "CacheDigestLoading"])
 arguments = parser.parse_args()
 repository = Path(__file__).resolve().parent.parent
 

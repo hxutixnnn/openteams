@@ -30,7 +30,7 @@ struct ChatCommands: Commands {
             Button("New Chat") { actions?.newChat?() }
                 .disabled(actions?.newChat == nil)
             Divider()
-            Button("Find Chats") { actions?.findChats?() }
+            Button("Search Teams") { actions?.findChats?() }
                 .keyboardShortcut("f", modifiers: [.command, .option])
                 .disabled(actions?.findChats == nil)
             Button("Find in Conversation") { actions?.search() }

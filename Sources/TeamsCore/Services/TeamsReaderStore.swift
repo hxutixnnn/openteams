@@ -573,12 +573,26 @@ public final class TeamsReaderStore {
     }
 
     public func refreshKnownCreation(_ id: String, expectedAccount: String, expectedRevision: UUID) async throws {
+        try await refreshChatMetadata(id, expectedAccount: expectedAccount, expectedRevision: expectedRevision)
+    }
+
+    public func resolveSearchChat(_ id: String, expectedAccount: String, expectedRevision: UUID) async throws {
+        try Task.checkCancellation()
+        guard connected, accountScope == expectedAccount, accountRevision == expectedRevision else { throw CancellationError() }
+        if conversation(id) == nil {
+            try await refreshChatMetadata(id, expectedAccount: expectedAccount, expectedRevision: expectedRevision, includeDeleted: false)
+        }
+        guard let chat = conversation(id), chat.isConversationDeleted != true else { throw TeamsSearchError.invalidChatID }
+    }
+
+    private func refreshChatMetadata(_ id: String, expectedAccount: String, expectedRevision: UUID, includeDeleted: Bool = true) async throws {
         guard accountScope == expectedAccount, accountRevision == expectedRevision, connected, let client = availableClient() else { throw CancellationError() }
         let current = generation, revision = sessionRevision
         do {
             let chat = try await client.knownChat(id)
             guard current == generation, revision == sessionRevision, accountScope == expectedAccount,
-                  accountRevision == expectedRevision, connected else { throw CancellationError() }
+                  accountRevision == expectedRevision, connected, !Task.isCancelled else { throw CancellationError() }
+            guard includeDeleted || chat.isConversationDeleted != true else { throw TeamsSearchError.invalidChatID }
             let old = conversation(id)
             let merged = TeamsWebChat(id: id, title: chat.title ?? old?.title, chatType: chat.chatType ?? old?.chatType,
                                       threadType: old?.threadType, isOneOnOne: chat.isOneOnOne ?? old?.isOneOnOne,
@@ -589,17 +603,24 @@ public final class TeamsReaderStore {
             chats.removeAll { $0.id == id }; chats.insert(merged, at: 0)
         } catch {
             guard current == generation, revision == sessionRevision, accountScope == expectedAccount,
-                  accountRevision == expectedRevision else { throw CancellationError() }
+                  accountRevision == expectedRevision, !Task.isCancelled else { throw CancellationError() }
             if let failure = error as? TeamsWebClientError { record(failure, chatID: id) }
             throw error
         }
     }
 
-    public var canSearchServer: Bool { connected && session?.searchSession != nil }
+    private var currentSearchSession: TeamsSearchSession? {
+        guard connected, let search = session?.searchSession,
+              search.accountID.caseInsensitiveCompare(accountID) == .orderedSame,
+              search.tenantID.caseInsensitiveCompare(tenantID) == .orderedSame else { return nil }
+        return search
+    }
+
+    public var canSearchServer: Bool { currentSearchSession != nil }
     public var searchCoolingDown: Bool { searchRetryNotBefore.map { $0 > Date() } ?? false }
 
-    public func searchServer(_ query: String, in chatID: String, page: Int = 0) async throws -> TeamsMessageSearchPage {
-        guard connected, let search = session?.searchSession else { throw TeamsSearchError.invalidSession }
+    public func searchServer(_ query: String, in chatID: String? = nil, page: Int = 0) async throws -> TeamsMessageSearchPage {
+        guard let search = currentSearchSession else { throw TeamsSearchError.invalidSession }
         if let deadline = searchRetryNotBefore, deadline > Date() { throw TeamsSearchError.http(status: 429, retryAfter: deadline.timeIntervalSinceNow) }
         let current = generation, revision = sessionRevision
         do {
