@@ -7,6 +7,7 @@ struct ChatWindowActions {
     var canCompose = true
     var newChat: (() -> Void)? = nil
     var canInspect = true
+    var findChats: (() -> Void)? = nil
 }
 
 private struct ChatActionsKey: FocusedValueKey { typealias Value = ChatWindowActions }
@@ -29,6 +30,9 @@ struct ChatCommands: Commands {
             Button("New Chat") { actions?.newChat?() }
                 .disabled(actions?.newChat == nil)
             Divider()
+            Button("Find Chats") { actions?.findChats?() }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+                .disabled(actions?.findChats == nil)
             Button("Find in Conversation") { actions?.search() }
                 .keyboardShortcut("f")
                 .disabled(actions?.canInspect != true)

@@ -4,10 +4,10 @@ import TeamsCore
 struct TeamsReadSidebar: View {
     var store: TeamsReaderStore
     @Binding var selection: String?
-    @ViewState private var filterFocus = ConversationSearchFocus()
     @Binding var filter: String
     let connect: () -> Void
     let newChat: () -> Void
+    var searchSubmission: UUID? = nil
     @ViewState<Bool> private var unreadOnly = false
     @ViewState<Bool> private var draftsOnly = false
     @ViewState<[String: Bool]> private var expandedFolders = [:]
@@ -28,6 +28,11 @@ struct TeamsReadSidebar: View {
         }
     }
     private var hasFolderResults: Bool { folders.contains { !folderChats($0).isEmpty } }
+    private var searchResults: [TeamsWebChat] {
+        let personal = store.selfChat.map { matches($0) ? [$0] : [] } ?? []
+        var seen = Set<String>()
+        return (personal + folders.flatMap { folderChats($0) } + chats).filter { seen.insert($0.id).inserted }
+    }
 
     private func folderChats(_ folder: TeamsConversationFolder) -> [TeamsWebChat] {
         let ids = itemIDs(folder)
@@ -53,19 +58,45 @@ struct TeamsReadSidebar: View {
     }
 
     private var conversationList: some View {
-        List(selection: $selection) {
+        let results = filter.isEmpty ? [] : searchResults
+        return List(selection: $selection) {
+            if filter.isEmpty {
+                sidebarSections
+            } else {
+                Section("Search Results") { ForEach(results) { row($0) } }
+            }
+        }
+        .listStyle(.sidebar)
+        .overlay {
+            if !filter.isEmpty && results.isEmpty {
+                ContentUnavailableView.search(text: filter)
+            } else if unreadOnly && filter.isEmpty && chats.isEmpty && !hasFolderResults && store.selfChat?.isRead != false {
+                ContentUnavailableView("No unread chats", systemImage: "checkmark.bubble", description: Text("You're all caught up."))
+            } else if draftsOnly && filter.isEmpty && chats.isEmpty && !hasFolderResults && !(store.selfChat.map { matches($0) } ?? false) {
+                ContentUnavailableView("No local drafts", systemImage: "doc.text", description: Text("Drafts saved on this Mac appear here."))
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) { sidebarHeader }
+        .onChange(of: searchSubmission) { _, _ in
+            if let result = results.first { selection = result.id }
+        }
+        .onChange(of: store.accountScope) { _, _ in expandedFolders = [:]; draftsOnly = false }
+    }
+
+    private var sidebarSections: some View {
+        Group {
             if let selfChat = store.selfChat, !folders.contains(where: { itemIDs($0).contains(selfChat.id) }), matches(selfChat) {
                 Section("Personal") { row(selfChat) }
             }
             ForEach(folders) { folder in
                 let folderItems = folderChats(folder)
                 let unresolved = itemIDs(folder).filter { store.conversation($0) == nil }.count
-                if !folderItems.isEmpty || (filter.isEmpty && !unreadOnly && !draftsOnly) {
+                if !folderItems.isEmpty || (!unreadOnly && !draftsOnly) {
                     Section(isExpanded: Binding(get: { expandedFolders[folder.id] ?? folder.isExpanded ?? true },
                                                 set: { expandedFolders[folder.id] = $0 })) {
                         ForEach(folderItems) { row($0) }
                         if folder.conversationFolderItems.isEmpty { Text("No conversations").font(.caption).foregroundStyle(.secondary) }
-                        if unresolved > 0 && filter.isEmpty && !unreadOnly && !draftsOnly {
+                        if unresolved > 0 && !unreadOnly && !draftsOnly {
                             if store.hasMoreChats { Button("Load more chats (\(unresolved) not loaded)") { Task { await store.loadMoreChats() } }.disabled(store.isLoadingChats) }
                             else { Text("\(unresolved) conversations not available").font(.caption).foregroundStyle(.secondary) }
                         }
@@ -84,7 +115,7 @@ struct TeamsReadSidebar: View {
                 let assigned = Set(folders.flatMap { itemIDs($0) })
                 ForEach(chats.filter { !assigned.contains($0.id) }) { chat in row(chat) }
             }
-            if store.hasMoreChats && filter.isEmpty {
+            if store.hasMoreChats {
                 Button {
                     Task { await store.loadMoreChats() }
                 } label: {
@@ -97,60 +128,42 @@ struct TeamsReadSidebar: View {
                 .disabled(store.isLoadingChats || !store.connected)
             }
         }
-        .listStyle(.sidebar)
-        .overlay {
-            if !filter.isEmpty && chats.isEmpty && !hasFolderResults && !(store.selfChat.map { matches($0) } ?? false) {
-                ContentUnavailableView.search(text: filter)
-            } else if unreadOnly && filter.isEmpty && chats.isEmpty && !hasFolderResults && store.selfChat?.isRead != false {
-                ContentUnavailableView("No unread chats", systemImage: "checkmark.bubble", description: Text("You're all caught up."))
-            } else if draftsOnly && filter.isEmpty && chats.isEmpty && !hasFolderResults && !(store.selfChat.map { matches($0) } ?? false) {
-                ContentUnavailableView("No local drafts", systemImage: "doc.text", description: Text("Drafts saved on this Mac appear here."))
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 8) {
-                HStack {
-                    Text("Chat").font(.headline)
-                    Spacer()
-                    Button(action: newChat) { Image(systemName: "square.and.pencil") }
-                        .buttonStyle(.borderless).foregroundStyle(.secondary).disabled(!store.canFindPeople)
-                        .help("New chat").accessibilityLabel("New Chat")
-                }
-                .padding(.horizontal, 16).padding(.top, 10)
-                searchField
-                HStack {
-                    Toggle("Unread", isOn: $unreadOnly)
-                        .toggleStyle(.button)
-                    Toggle("Drafts", isOn: $draftsOnly)
-                        .toggleStyle(.button).help("Drafts saved on this Mac")
-                    if unreadOnly || draftsOnly || !filter.isEmpty {
-                        Button("Clear") { unreadOnly = false; draftsOnly = false; filter = "" }
-                            .help("Clear conversation filters").accessibilityLabel("Clear conversation filters")
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 12).padding(.bottom, 4)
-                if let error = store.chatListError, !store.chats.isEmpty {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                        Text(error).font(.caption).foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 12).padding(.bottom, 6)
-                }
-                if let warning = store.foldersWarning {
-                    Text(warning).font(.caption).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
-                }
-            }
-        }
-        .onChange(of: store.accountScope) { _, _ in expandedFolders = [:]; draftsOnly = false }
     }
 
-    private var searchField: some View {
-        ConversationSearchField(text: $filter, focus: filterFocus, accessibilityName: "Find a Teams conversation",
-                                placeholder: "Filter conversations", focusOnAppear: false)
-            .frame(height: 28)
-            .padding(.horizontal, 12).padding(.bottom, 2)
+    private var sidebarHeader: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("Chat").font(.headline)
+                Spacer()
+                Button(action: newChat) { Image(systemName: "square.and.pencil") }
+                    .buttonStyle(.borderless).foregroundStyle(.secondary).disabled(!store.canFindPeople)
+                    .help("New chat").accessibilityLabel("New Chat")
+            }
+            .padding(.horizontal, 16).padding(.top, 10)
+            HStack {
+                Toggle("Unread", isOn: $unreadOnly)
+                    .toggleStyle(.button)
+                Toggle("Drafts", isOn: $draftsOnly)
+                    .toggleStyle(.button).help("Drafts saved on this Mac")
+                if unreadOnly || draftsOnly || !filter.isEmpty {
+                    Button("Clear") { unreadOnly = false; draftsOnly = false; filter = "" }
+                        .help("Clear conversation filters").accessibilityLabel("Clear conversation filters")
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 12).padding(.bottom, 4)
+            if let error = store.chatListError, !store.chats.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
+                    Text(error).font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12).padding(.bottom, 6)
+            }
+            if let warning = store.foldersWarning {
+                Text(warning).font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
+            }
+        }
     }
 
     private var accountFooter: some View {
