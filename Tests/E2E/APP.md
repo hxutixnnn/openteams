@@ -24,6 +24,14 @@ Tien granted foreground handling for the earlier PR #2/#4 Delete question at 19:
 4. Click `Quit Fixture`. Verify this fixture process/window closed. Relaunch the same bundle, select `Fictional project`, and verify the native editor restores identical text, bold/list formatting and mention. Verify the planning draft also restores. Compare saved rich JSON before and after restart.
 5. Click `Account B`; the same conversation IDs must have empty drafts. Type `Account B only` in its actual editor. Click `Account A`; the original A rich draft must return. Switch B/A again and verify separation, including after another fixture restart.
 
+## Window search for loaded chats
+
+Use the standard performance fixture on macOS 27. Wait for Account A and `Fictional project`, then exercise the production toolbar and commands:
+
+1. Hide the sidebar. Focus the composer, press **⌥⌘F**, and type `pLaNnInG`. Verify the window toolbar's **Search loaded chats** field receives the characters, the sidebar shows only **Fictional planning**, and the composer remains unchanged.
+2. Press **Return**. Verify **Fictional planning** opens. Enter a query with no matches and verify the sidebar shows an empty result without changing the selected chat. Clear the search field and verify the normal sidebar sections return.
+3. Press **⌘F** from the conversation. Verify the inspector search gets focus and the toolbar query stays empty. If two fixture windows are available, verify **⌥⌘F** and typing leave the other window's search and selection unchanged.
+
 ## E2E-2: row actions after refresh and paging
 
 1. In Account A / Fictional project, confirm message 100 is visible. Use its production context menu: Reply must populate a reply preview; Cancel reply must remove it. Edit Message must open the production editor with that message; cancel without saving. Delete Message must be enabled for this own message.

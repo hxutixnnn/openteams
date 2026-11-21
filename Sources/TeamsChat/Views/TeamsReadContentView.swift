@@ -21,6 +21,8 @@ struct TeamsReadContentView: View {
     @AppStorage("teamsLastSelectedAccount") private var lastSelectedAccount = ""
     @ViewState<InspectorTab> private var inspectorTab = .people
     @ViewState<String> private var conversationFilter = ""
+    @ViewState<ConversationSearchFocus> private var chatSearchFocus = ConversationSearchFocus()
+    @ViewState<UUID?> private var chatSearchSubmission = nil
     @ViewState<String> private var messageQuery = ""
     @ViewState<TeamsMessageDestination?> private var jumpToMessage: TeamsMessageDestination? = nil
     @ViewState<UUID> private var focusRequest = UUID()
@@ -43,7 +45,8 @@ struct TeamsReadContentView: View {
             TeamsReadSidebar(store: store,
                              selection: Binding(get: { selectedID }, set: { selectedID = $0 ?? "" }),
                              filter: $conversationFilter, connect: connect,
-                             newChat: { newChatPresentation = .init(account: store.accountScope, revision: store.accountRevision) })
+                             newChat: { newChatPresentation = .init(account: store.accountScope, revision: store.accountRevision) },
+                             searchSubmission: chatSearchSubmission)
                 .navigationTitle("Chats")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
@@ -71,8 +74,12 @@ struct TeamsReadContentView: View {
             details: { inspectorTab = .people; showInspector.toggle() },
             compose: { focusRequest = UUID() }, canCompose: selectedChat != nil,
             newChat: store.canFindPeople ? { newChatPresentation = .init(account: store.accountScope, revision: store.accountRevision) } : nil,
-            canInspect: selectedChat != nil
+            canInspect: selectedChat != nil,
+            findChats: openChatSearch
         ))
+        .onChange(of: conversationFilter) { _, query in
+            if !query.isEmpty { columnVisibility = .all }
+        }
         .onChange(of: store.connected) { _, connected in
             if !connected && !store.sessionExpired { newChatPresentation = nil }
             routePendingNotification()
@@ -179,6 +186,12 @@ struct TeamsReadContentView: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            ConversationSearchField(text: $conversationFilter, focus: chatSearchFocus, accessibilityName: "Search loaded chats",
+                                    submit: { chatSearchSubmission = UUID() }, placeholder: "Search loaded chats", focusOnAppear: false)
+                .frame(minWidth: 140, idealWidth: 220, maxWidth: 260)
+                .help("Search loaded chats (⌥⌘F)")
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             Button(action: openSearch) { Label("Find in Conversation", systemImage: "magnifyingglass") }
                 .disabled(selectedChat == nil)
@@ -196,6 +209,11 @@ struct TeamsReadContentView: View {
             } label: { Label("More", systemImage: "ellipsis") }
                 .help("More options")
         }
+    }
+
+    private func openChatSearch() {
+        columnVisibility = .all
+        chatSearchFocus.focus()
     }
 
     private func openSearch() {
