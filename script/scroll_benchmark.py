@@ -75,3 +75,4 @@ if arguments.output:
     Path(arguments.output).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
 print(json.dumps(result, indent=2, sort_keys=True))
 shutil.rmtree(root, ignore_errors=True)
+sys.exit(1 if "error" in result else 0)

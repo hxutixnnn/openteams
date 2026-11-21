@@ -295,8 +295,9 @@ private struct BodyTraversal {
                let json = try? JSONSerialization.jsonObject(with: data) {
                 flush()
                 for text in cardText(json).prefix(60) {
-                    let parsed = TeamsBodyParser.parse(text)
-                    blocks.append(contentsOf: parsed.blocks)
+                    guard let document = try? SwiftSoup.parseBodyFragment(text), let body = document.body() else { continue }
+                    for node in body.getChildNodes() { visit(node, style: .init(text: ""), depth: depth + 1) }
+                    flush()
                 }
             }
             return

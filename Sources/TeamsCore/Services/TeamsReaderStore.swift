@@ -30,6 +30,7 @@ public enum TeamsMessageEditError: Error { case storage }
 @MainActor @Observable
 public final class TeamsReaderStore {
     public let composer: TeamsComposeStore
+    @ObservationIgnored public var diagnostics: TeamsDiagnostics?
     public private(set) var chats: [TeamsWebChat] = []
     public private(set) var serverChatSnapshot: TeamsServerChatSnapshot?
     @ObservationIgnored public var onServerChatSnapshot: (@MainActor (TeamsServerChatSnapshot) -> Void)?
@@ -99,7 +100,7 @@ public final class TeamsReaderStore {
     private var reactionsAwaitingRefresh: Set<ReactionTarget> = []
     private var deletionStages: [ReactionTarget: TeamsPendingDeletion.Stage] = [:]
     private var deletionStatusRevision: [ReactionTarget: UUID] = [:]
-    private var loadedDeletionStatus: Set<ReactionTarget> = []
+    private var loadingDeletionStatus: Set<ReactionTarget> = []
     private var deletionMessages: [ReactionTarget: String] = [:]
     private var acceptedDeletionMemory: Set<ReactionTarget> = []
     private var checkingDeletions: Set<ReactionTarget> = []
@@ -1201,8 +1202,9 @@ public final class TeamsReaderStore {
         guard expectedScope == accountScope, expectedRevision == accountRevision, let cache else { return }
         let current = generation, target = ReactionTarget(chat: chatID, message: messageID)
         let observed = deletionStatusRevision[target]
-        guard !loadedDeletionStatus.contains(target) else { return }
-        loadedDeletionStatus.insert(target)
+        guard !loadingDeletionStatus.contains(target) else { return }
+        loadingDeletionStatus.insert(target)
+        defer { loadingDeletionStatus.remove(target) }
         do {
             let pending = try await cache.pendingDeletion(in: chatID, messageID: messageID)
             guard current == generation, expectedRevision == accountRevision, expectedScope == accountScope, deletionStatusRevision[target] == observed else { return }
@@ -1212,7 +1214,6 @@ public final class TeamsReaderStore {
             guard deletionStages[target] != stage else { return }
             deletionStages[target] = stage
         } catch {
-            loadedDeletionStatus.remove(target)
             if current == generation, expectedRevision == accountRevision, expectedScope == accountScope { chatErrors[chatID] = "Could not read the saved deletion status." }
         }
     }
@@ -1718,7 +1719,7 @@ public final class TeamsReaderStore {
         pendingReadChatIDs = []; finishableReadChatIDs = []; readStatusMessages = [:]
         conversationFolders = nil; foldersWarning = nil; loadingFolders = false
         loadingChatIDs = []; isLoadingChats = false; hasMoreChats = false
-        reacting = []; reactionsAwaitingRefresh = []; deletionStages = [:]; deletionStatusRevision = [:]; deletionMessages = [:]; acceptedDeletionMemory = []; checkingDeletions = []; loadedDeletionStatus = []
+        reacting = []; reactionsAwaitingRefresh = []; deletionStages = [:]; deletionStatusRevision = [:]; deletionMessages = [:]; acceptedDeletionMemory = []; checkingDeletions = []; loadingDeletionStatus = []
         chatsCursor = nil; connected = false; sessionExpired = false
         chatListError = nil; chatErrors = [:]; cacheWarning = nil; lastRefreshedAt = nil
         retryNotBefore = nil
@@ -1888,6 +1889,7 @@ public final class TeamsReaderStore {
 
     private func record(_ error: any Error, chatID: String? = nil, silent: Bool = false) {
         if error is CancellationError || Task.isCancelled { return }
+        if let incident = TeamsIncident(error: error, subsystem: chatID == nil ? "chatList" : "conversation"), let diagnostics { Task { await diagnostics.report(incident) } }
         let message = (error as? TeamsWebClientError)?.localizedDescription ?? "Teams could not complete this read. Try again."
         if !silent {
             if let chatID { chatErrors[chatID] = message } else { chatListError = message }

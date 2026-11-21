@@ -9,7 +9,7 @@ struct TeamsUpdateView: View {
         ScrollView {
         VStack(alignment: .leading, spacing: 16) {
             Text("OpenTeams Updates").font(.title2.bold())
-            Text("Installed build: \(updater.revision.prefix(7))").foregroundStyle(.secondary)
+            Text("Installed: \(updater.version) (\(updater.buildNumber)) · \(updater.revision.prefix(7))").foregroundStyle(.secondary)
             Text(updater.message).textSelection(.enabled)
                 .accessibilityLabel("Update status").accessibilityValue(updater.message)
             if updater.busy { ProgressView().controlSize(.small) }
