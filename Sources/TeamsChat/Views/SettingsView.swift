@@ -1,4 +1,5 @@
 import SwiftUI
+import TeamsCore
 
 struct SettingsView: View {
     var connection: TeamsConnection
@@ -60,6 +61,8 @@ struct SettingsView: View {
                     Text("Fictional conversations with local sending and saved drafts.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                GitHubIssueReportingSection()
+                    .disabled(isolated)
                 Section("Updates") {
                     Button("Check for Updates…") { openWindow(id: "updates") }
                         .disabled(isolated)
@@ -67,5 +70,45 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 590, height: 560)
+    }
+}
+
+private struct GitHubIssueReportingSection: View {
+    @ViewState<String> private var draft = ""
+    @ViewState<Bool> private var saved = false
+    @ViewState<String?> private var message: String?
+
+    var body: some View {
+        Section("Issue Reporting") {
+            if saved {
+                LabeledContent("GitHub token", value: "Saved in Keychain")
+                Button("Remove Token", role: .destructive) {
+                    do {
+                        try GitHubTokenStore.delete()
+                        saved = false
+                        message = nil
+                    } catch { message = "The token could not be removed from Keychain." }
+                }
+            } else {
+                SecureField("GitHub token", text: $draft)
+                    .onSubmit(save)
+                Button("Save to Keychain", action: save)
+                    .disabled(GitHubTokenStore.normalized(draft) == nil)
+            }
+            if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
+            Text("Used only to file issues in \(GitHubIssueClient.defaultRepository). Create a fine-grained token for that repository with Issues read and write access. Tokens, message text and personal details are removed before anything is sent.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .onAppear { saved = GitHubTokenStore.contains() }
+    }
+
+    private func save() {
+        guard GitHubTokenStore.normalized(draft) != nil else { return }
+        do {
+            try GitHubTokenStore.save(draft)
+            draft = ""
+            saved = true
+            message = nil
+        } catch { message = "The token could not be saved to Keychain." }
     }
 }
