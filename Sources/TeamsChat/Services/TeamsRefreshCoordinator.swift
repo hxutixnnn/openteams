@@ -13,10 +13,13 @@ final class TeamsRefreshCoordinator {
     private var loop: Task<Void, Never>?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var policy: TeamsRefreshPolicy
+    private let stallThreshold: TimeInterval
+    private var reportedStall = false
 
     init(reader: TeamsReaderStore, defaults: UserDefaults = .standard, tickInterval: TimeInterval = 15, maintenanceInterval: TimeInterval = 60) {
         self.reader = reader; self.defaults = defaults; self.tickInterval = max(1, tickInterval)
         self.policy = TeamsRefreshPolicy(maintenanceInterval: maintenanceInterval)
+        self.stallThreshold = max(1, maintenanceInterval) * 3
     }
     func start() {
         guard loop == nil else { return }
@@ -73,6 +76,11 @@ final class TeamsRefreshCoordinator {
         }
     }
     func tick(at now: Date = Date()) {
+        let stalled = reader.connected && reader.lastRefreshedAt.map { now.timeIntervalSince($0) > stallThreshold } == true
+        if stalled, !reportedStall, let diagnostics = reader.diagnostics {
+            Task { await diagnostics.report(TeamsIncident(kind: .stalledSync, subsystem: "refresh", signature: "stalledSync", occurredAt: now)) }
+        }
+        reportedStall = stalled
         let activeChats = Set(windows.values.filter(\.active).map(\.chatID).filter { !$0.isEmpty })
         let hasActiveWindow = windows.values.contains { $0.active }
         let notifications = defaults.bool(forKey: "teamsNotificationsEnabled")
