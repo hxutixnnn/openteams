@@ -43,6 +43,8 @@ struct TeamsUpdateStatus: Codable, Equatable {
     private let installedRevision: String
 
     var revision: String { installedRevision }
+    var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown" }
+    var buildNumber: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown" }
     var busy: Bool { checking || status?.active == true }
     var canInstall: Bool {
         !busy && prerequisiteIssue == nil && available != nil && Bundle.main.bundleURL.path == "/Applications/OpenTeams.app"

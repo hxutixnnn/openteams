@@ -6,6 +6,11 @@ APP_NAME="OpenTeams"
 BUNDLE_ID="dev.native.teamschat"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
+read -r MARKETING_VERSION BUILD_NUMBER < "$ROOT_DIR/VERSION"
+if [[ ! "$MARKETING_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+  echo "VERSION must contain a marketing version (major.minor.patch) and a positive integer build number." >&2
+  exit 1
+fi
 
 case "$MODE" in
   run|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|verify|--build-only) ;;
@@ -60,8 +65,8 @@ cat > "$APP_CONTENTS/Info.plist" <<PLIST
   <key>CFBundleName</key><string>OpenTeams</string>
   <key>CFBundleDisplayName</key><string>OpenTeams</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>$MARKETING_VERSION</string>
+  <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
   <key>OpenTeamsSourceRevision</key><string>$SOURCE_REVISION</string>
   <key>LSMinimumSystemVersion</key><string>27.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
