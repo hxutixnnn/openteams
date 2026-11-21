@@ -46,6 +46,15 @@ Record the original ID, account-specific original text, chip/accessibility state
 
 Run `python3 script/test_fixture_deletion_e2e.py`. This bounded process extracts the exact DEBUG transport from the app source and drives production reader, action client and temporary cache APIs. It verifies untouched and edited-row deletion, strictly newer versions, merged tombstones, cleared pending records, neighboring values, drafts and account/conversation isolation. It does not launch an app or replace native confirmation/action-target acceptance. No production newer-version check is relaxed.
 
+## Notification target navigation
+
+Use a DEBUG app launched with `--notification-fixture` on macOS 27. These controls simulate a click through the production app delegate and router; they do not test OS notification delivery.
+
+1. Wait for Fixture A to open at the latest message. Click **Notify for A · message 5**; verify the timeline moves to **Fixture A · message 5**, not the last message.
+2. From Fixture A, click **Notify for B · message 5** without first loading Fixture B. Verify Fixture B opens and its timeline moves to **Fixture B · message 5**, not the last message or an error sheet.
+3. Return to Fixture A and click **Notify for B · context only**. Verify Fixture B opens and the **Message context** sheet shows **Fixture B · context-only notification** as the original message.
+4. Dismiss the sheet, click **Simulate after close** and close the chat window within eight seconds. Verify that it reopens to Fixture B and moves to **Fixture B · message 5**.
+
 ## Evidence and limits
 
 Record the commit and source hashes, bundle binary hash, temporary root, process/window IDs, actual editor text and persisted rich JSON, and per-step passed/failed/blocked status. Restart means terminating and relaunching this same fixture process, not constructing another store in a test executable. The supplied fixture rejects unsupported requests, including sending and reactions other than the context-original Like scenario above. Existing intercepted core workflows separately cover send uncertainty and recovery.

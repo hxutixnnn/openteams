@@ -119,7 +119,7 @@ struct TeamsReadContentView: View {
         } message: { Text(notificationRouter.error ?? "") }
         .onChange(of: selectedID) { _, _ in
             messageQuery = ""
-            jumpToMessage = nil
+            if jumpToMessage?.chatID != selectedID { jumpToMessage = nil }
             if persistSelection && selectedChat != nil {
                 lastSelectedChat = selectedID
                 lastSelectedAccount = store.accountScope
@@ -249,6 +249,8 @@ struct TeamsReadContentView: View {
         }
         selectionAccount = destination.accountScope
         selectedID = destination.chatID
+        jumpToMessage = .init(messageID: destination.messageID, chatID: destination.chatID, accountScope: destination.accountScope,
+                              notificationAccountRevision: store.accountRevision)
     }
 }
 
