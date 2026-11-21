@@ -21,6 +21,21 @@ public struct TeamsOutgoingMessage: Codable, Equatable, Sendable {
     public var richDraft: TeamsRichDraft? = nil
 }
 
+public struct TeamsConnectionIssueClock: Equatable, Sendable {
+    public let expiresAt: Date?
+    public let retryNotBefore: Date?
+
+    public func nextChange(after now: Date) -> Date? {
+        var changes: [Date] = []
+        if let expiresAt, expiresAt > now { changes.append(expiresAt) }
+        if let retryNotBefore, retryNotBefore > now {
+            let countdownTick = retryNotBefore.addingTimeInterval(1 - ceil(retryNotBefore.timeIntervalSince(now)))
+            changes.append(countdownTick > now ? countdownTick : countdownTick.addingTimeInterval(1))
+        }
+        return changes.min()
+    }
+}
+
 @MainActor @Observable
 public final class TeamsComposeStore {
     public private(set) var drafts: [String: String] = [:]
@@ -136,6 +151,11 @@ public final class TeamsComposeStore {
             return "Teams is limiting requests. Try again in \(Int(ceil(retryNotBefore.timeIntervalSince(now)))) seconds."
         }
         return nil
+    }
+
+    public var connectionIssueClock: TeamsConnectionIssueClock {
+        let expiresAt = session.flatMap { session in session.messaging.map { min($0.expiresAt, session.expiresAt) } }
+        return .init(expiresAt: expiresAt, retryNotBefore: retryNotBefore)
     }
 
     public func canSend(in chatID: String, at now: Date = Date()) -> Bool {
