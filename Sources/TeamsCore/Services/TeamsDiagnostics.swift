@@ -163,13 +163,17 @@ public final class TeamsDiagnostics {
     public let log: TeamsIncidentLog
     public var onIncident: ((TeamsIncidentRecord) -> Void)?
     public var healers: [TeamsHealAction: @MainActor (TeamsIncident) async -> Bool] = [:]
+    public var reporter: TeamsIncidentReporter?
     public private(set) var persistenceFailed = false
     public private(set) var healingFingerprints: Set<String> = []
     private let sentinelURL: URL
+    private let healGracePeriod: Duration
     private var sessionStarted = false
+    private var pendingEscalations: [String: Task<Void, Never>] = [:]
 
-    public init(log: TeamsIncidentLog = TeamsIncidentLog(), sentinelURL: URL = TeamsIncidentLog.defaultURL.deletingLastPathComponent().appending(path: "session-active")) {
-        self.log = log; self.sentinelURL = sentinelURL
+    public init(log: TeamsIncidentLog = TeamsIncidentLog(), sentinelURL: URL = TeamsIncidentLog.defaultURL.deletingLastPathComponent().appending(path: "session-active"),
+                healGracePeriod: Duration = .seconds(120)) {
+        self.log = log; self.sentinelURL = sentinelURL; self.healGracePeriod = healGracePeriod
     }
 
     public func report(_ incident: TeamsIncident) async {
@@ -185,6 +189,7 @@ public final class TeamsDiagnostics {
                 record = try await log.recordHeal(fingerprint: fingerprint, succeeded: healed) ?? record
             }
             onIncident?(record)
+            scheduleEscalation(record.fingerprint, after: healGracePeriod)
         }
         catch { persistenceFailed = true }
     }
@@ -192,6 +197,19 @@ public final class TeamsDiagnostics {
     public func recordHeal(fingerprint: String, succeeded: Bool) async {
         do { try await log.recordHeal(fingerprint: fingerprint, succeeded: succeeded) }
         catch { persistenceFailed = true }
+        if !succeeded { scheduleEscalation(fingerprint, after: .zero) }
+    }
+
+    private func scheduleEscalation(_ fingerprint: String, after delay: Duration) {
+        guard let reporter else { return }
+        if delay > .zero, pendingEscalations[fingerprint] != nil { return }
+        pendingEscalations[fingerprint] = Task { [weak self] in
+            if delay > .zero {
+                do { try await Task.sleep(for: delay) } catch { return }
+            }
+            await reporter.escalate(fingerprint: fingerprint)
+            self?.pendingEscalations[fingerprint] = nil
+        }
     }
 
     public func beginSession() async {
@@ -203,6 +221,7 @@ public final class TeamsDiagnostics {
             try Data().write(to: sentinelURL, options: .atomic)
         } catch { persistenceFailed = true }
         if unclean { await report(TeamsIncident(kind: .crash, subsystem: "app", signature: "uncleanExit")) }
+        for record in await log.records() { scheduleEscalation(record.fingerprint, after: healGracePeriod) }
     }
 
     public func endSession() {

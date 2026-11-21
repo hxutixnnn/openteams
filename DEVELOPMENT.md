@@ -108,6 +108,12 @@ Paste a GitHub token once in **Settings → Issue Reporting**. It is stored in t
 python3 script/test_performance_e2e.py --skip-build --scenario GitHubIssueFiling
 ```
 
+`TeamsIncidentReporter` turns incident log entries into issues labeled `auto` and `bug`. `TeamsDiagnostics` asks it to escalate each incident after a two-minute heal window, immediately when a heal fails, and on launch for entries still unreported. It files only what `TeamsIncidentLog` escalates (unhealed, failed heal, or at least three occurrences), uses the log fingerprint so repeats comment on the open issue (at most every six hours) instead of duplicating it, files again when that issue was closed, and pauses after GitHub rate limits. Reports carry only the incident kind, subsystem, signature, counts, heal outcomes and app/OS versions. Without a saved token nothing is sent and the incident stays pending.
+
+```sh
+python3 script/test_performance_e2e.py --skip-build --scenario IncidentIssueFiling
+```
+
 ## Troubleshooting
 
 | Symptom | Fix |
