@@ -160,7 +160,7 @@ struct TeamsReadSidebar: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(store.accountName.isEmpty ? "Teams account" : store.accountName)
                         .font(.callout.weight(.medium)).lineLimit(1)
-                    Text(store.connected && !store.sessionExpired ? "Connected" :
+                    Text(store.connected && !store.sessionExpired ? (store.isReconnecting ? "Reconnecting…" : "Connected") :
                          (store.chats.isEmpty ? "Not connected" : "Saved on this Mac"))
                         .font(.caption).foregroundStyle(.secondary)
                         .padding(.horizontal, 8).padding(.vertical, 2)
