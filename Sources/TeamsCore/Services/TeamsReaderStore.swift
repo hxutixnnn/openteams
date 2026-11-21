@@ -103,7 +103,6 @@ public final class TeamsReaderStore {
     private var reconnectAttempt = 0
     private var transientChatIDs: Set<String> = []
     private var transientChatList = false
-    private var unhealedIncidents: [String: String] = [:]
     private var creatingAccounts: Set<String> = []
     private var markingRead: [String: UUID] = [:]
     private var confirmedReadHorizons: [String: UInt64] = [:]
@@ -2015,10 +2014,7 @@ public final class TeamsReaderStore {
 
     private func record(_ error: any Error, chatID: String? = nil, silent: Bool = false, reconnects: Bool = false) {
         if error is CancellationError || Task.isCancelled { return }
-        if let incident = TeamsIncident(error: error, subsystem: chatID == nil ? "chatList" : "conversation"), let diagnostics {
-            if reconnects { unhealedIncidents[chatID ?? ""] = incident.fingerprint }
-            Task { await diagnostics.report(incident) }
-        }
+        if let incident = TeamsIncident(error: error, subsystem: chatID == nil ? "chatList" : "conversation"), let diagnostics { Task { await diagnostics.report(incident) } }
         let message = (error as? TeamsWebClientError)?.localizedDescription ?? "Teams could not complete this read. Try again."
         if !silent {
             if let chatID { chatErrors[chatID] = message } else { chatListError = message }
@@ -2057,9 +2053,6 @@ public final class TeamsReaderStore {
     }
 
     private func recovered(chatID: String? = nil) {
-        if let fingerprint = unhealedIncidents.removeValue(forKey: chatID ?? ""), let diagnostics {
-            Task { await diagnostics.recordHeal(fingerprint: fingerprint, succeeded: true) }
-        }
         if let chatID { transientChatIDs.remove(chatID) } else { transientChatList = false }
         isReconnecting = transientChatList || !transientChatIDs.isEmpty
         if !isReconnecting { reconnectAttempt = 0; reconnectTask?.cancel(); reconnectTask = nil }
