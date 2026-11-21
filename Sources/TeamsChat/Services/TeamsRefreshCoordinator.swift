@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Network
 import TeamsCore
 
 @MainActor
@@ -17,6 +18,8 @@ final class TeamsRefreshCoordinator {
     private var reportedStall = false
     private var refreshExpectedSince: Date?
     private var refreshAccountScope: String?
+    private var pathMonitor: NWPathMonitor?
+    private var pathWasUnsatisfied = false
 
     init(reader: TeamsReaderStore, defaults: UserDefaults = .standard, tickInterval: TimeInterval = 15, maintenanceInterval: TimeInterval = 60) {
         self.reader = reader; self.defaults = defaults; self.tickInterval = max(1, tickInterval)
@@ -25,6 +28,18 @@ final class TeamsRefreshCoordinator {
     }
     func start() {
         guard loop == nil else { return }
+        let monitor = NWPathMonitor()
+        pathMonitor = monitor
+        monitor.pathUpdateHandler = { [weak self, weak monitor] path in
+            let status = path.status
+            Task { @MainActor in
+                guard let self, let monitor, self.pathMonitor === monitor else { return }
+                let restored = self.pathWasUnsatisfied && status == .satisfied
+                self.pathWasUnsatisfied = status == .unsatisfied
+                if restored { self.refreshNow() }
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "TeamsRefreshCoordinator.network"))
         reader.onServerChatSnapshot = { [weak self] snapshot in self?.received(snapshot) }
         let wake = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.refreshNow() }
@@ -61,6 +76,7 @@ final class TeamsRefreshCoordinator {
         return id
     }
     func stop() {
+        pathMonitor?.cancel(); pathMonitor = nil; pathWasUnsatisfied = false
         loop?.cancel(); loop = nil
         refreshExpectedSince = nil; reportedStall = false
         for (center, observer) in observers { center.removeObserver(observer) }

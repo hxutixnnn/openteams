@@ -160,7 +160,7 @@ struct TeamsReadSidebar: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(store.accountName.isEmpty ? "Teams account" : store.accountName)
                         .font(.callout.weight(.medium)).lineLimit(1)
-                    Text(store.connected && !store.sessionExpired ? "Connected" :
+                    Text(store.connected && !store.sessionExpired ? (store.isReconnecting ? "Reconnecting…" : "Connected") :
                          (store.chats.isEmpty ? "Not connected" : "Saved on this Mac"))
                         .font(.caption).foregroundStyle(.secondary)
                         .padding(.horizontal, 8).padding(.vertical, 2)
@@ -183,18 +183,26 @@ struct TeamsReadSidebar: View {
         }
         let avatarID = chat.id == "48:notes" ? store.accountID : (chat.isOneOnOne == true ? (other?.mri ?? other?.objectId ?? chat.id) : chat.id + "-\(chat.members?.hashValue ?? 0)-\(chat.picture?.hashValue ?? 0)-\(chat.threadVersion?.hashValue ?? 0)")
         return HStack(spacing: 8) {
-            PersonAvatar(person: Person(id: avatarID, name: store.conversationTitle(chat)), size: 24, revision: store.mediaRevision, refreshRevision: store.mediaRefreshRevision, loadPhoto: { id in
+            PersonAvatar(person: Person(id: avatarID, name: store.conversationTitle(chat)), size: 32, revision: store.mediaRevision, refreshRevision: store.mediaRefreshRevision, loadPhoto: { id in
                 if chat.id != "48:notes", chat.isOneOnOne != true { return try await store.groupPhoto(for: chat.members ?? [], chatID: chat.id, picture: chat.picture, pictureVersion: chat.threadVersion) }
                 return try await store.profilePhoto(for: id)
             })
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.conversationTitle(chat))
-                    .font(.callout.weight(chat.isRead == false ? .semibold : .regular)).lineLimit(1)
+                HStack {
+                    Text(store.conversationTitle(chat))
+                        .font(.callout.weight(chat.isRead == false ? .semibold : .regular)).lineLimit(1)
+                    Spacer(minLength: 4)
+                    if let timestamp = TeamsChatListPresentation.timestampLabel(for: chat.lastMessage?.arrivalDate) {
+                        Text(timestamp).font(.caption2).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                    }
+                }
                 if let status = store.readStatusMessages[chat.id] ?? store.chatErrors[chat.id] ?? (store.pendingReadChatIDs.contains(chat.id) ? "Read update awaiting confirmation" : nil) {
                     Text(status).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                } else if let preview = TeamsChatListPresentation.preview(for: chat, accountID: store.accountID) {
+                    Text(preview).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
             if chat.isRead == false {
                 Circle().fill(ChatTheme.accent).frame(width: 6, height: 6)
                     .accessibilityLabel("Unread in Teams")
