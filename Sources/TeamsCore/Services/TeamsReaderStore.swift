@@ -1936,9 +1936,10 @@ public final class TeamsReaderStore {
     }
 
     private func recovered(chatID: String? = nil) {
-        reconnectAttempt = 0; isReconnecting = false
+        reconnectAttempt = 0
         if let chatID { transientChatIDs.remove(chatID) } else { transientChatList = false }
-        if transientChatIDs.isEmpty && !transientChatList { reconnectTask?.cancel(); reconnectTask = nil }
+        isReconnecting = transientChatList || !transientChatIDs.isEmpty
+        if !isReconnecting { reconnectTask?.cancel(); reconnectTask = nil }
     }
 
     private func scheduleReconnect() {
