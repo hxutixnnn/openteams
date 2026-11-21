@@ -470,6 +470,40 @@ final class TeamsConnection: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
 
+    func installHealers(on diagnostics: TeamsDiagnostics) {
+        diagnostics.healers[.retryWithBackoff] = { [weak self] incident in
+            await self?.reader.retryFailedReads(in: incident.subsystem) ?? false
+        }
+        diagnostics.healers[.resetView] = { [weak self] incident in
+            await self?.reader.resetFailedViews(in: incident.subsystem) ?? false
+        }
+        diagnostics.healers[.reconnectSync] = { [weak self] _ in
+            guard let self else { return false }
+            refreshCoordinator.restart()
+            return await reader.resync()
+        }
+        diagnostics.healers[.refreshAuth] = { [weak self] _ in
+            guard let self else { return false }
+            await renew()
+            return await waitForConnectedSession()
+        }
+        diagnostics.healers[.restartSubsystem] = { [weak self] _ in
+            guard let self else { return false }
+            guard defaults.string(forKey: "teamsAccountID") != nil, !defaults.bool(forKey: "teamsSignedOut") else { return true }
+            guard await waitForConnectedSession() else { return false }
+            return await reader.resync()
+        }
+    }
+
+    private func waitForConnectedSession(timeout: TimeInterval = 30) async -> Bool {
+        let deadline = now().addingTimeInterval(timeout)
+        while !reader.connected || reader.sessionExpired {
+            guard now() < deadline else { return false }
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return false }
+        }
+        return true
+    }
+
     func renew() async {
         guard !credentialWriteUncertain, !keychainNeedsApproval, !isConnecting, !checkingWebSession, !loadingCredentials, !isClearingSignIn, now() >= retryAfter, var saved = credentials else { return }
         guard saved.refreshToken != nil else {

@@ -6,6 +6,20 @@ public enum TeamsIncidentKind: String, Codable, Sendable {
     case crash, renderError, stalledSync, expiredAuth, networkFailure, brokenUIState
 }
 
+public enum TeamsHealAction: String, Codable, Sendable {
+    case retryWithBackoff, refreshAuth, reconnectSync, resetView, restartSubsystem
+
+    public init(_ kind: TeamsIncidentKind) {
+        switch kind {
+        case .networkFailure: self = .retryWithBackoff
+        case .expiredAuth: self = .refreshAuth
+        case .stalledSync: self = .reconnectSync
+        case .renderError, .brokenUIState: self = .resetView
+        case .crash: self = .restartSubsystem
+        }
+    }
+}
+
 public struct TeamsIncident: Codable, Sendable {
     public let kind: TeamsIncidentKind
     public let subsystem: String
@@ -96,12 +110,14 @@ public actor TeamsIncidentLog {
         return record
     }
 
-    public func recordHeal(fingerprint: String, succeeded: Bool) throws {
-        guard let index = entries.firstIndex(where: { $0.fingerprint == fingerprint }) else { return }
+    @discardableResult public func recordHeal(fingerprint: String, succeeded: Bool) throws -> TeamsIncidentRecord? {
+        guard let index = entries.firstIndex(where: { $0.fingerprint == fingerprint }) else { return nil }
         entries[index].healAttempts += 1
         entries[index].heals += succeeded ? 1 : 0
         entries[index].lastHealSucceeded = succeeded
+        let record = entries[index]
         try save()
+        return record
     }
 
     public func linkIssue(fingerprint: String, number: Int) throws {
@@ -146,7 +162,9 @@ public actor TeamsIncidentLog {
 public final class TeamsDiagnostics {
     public let log: TeamsIncidentLog
     public var onIncident: ((TeamsIncidentRecord) -> Void)?
+    public var healers: [TeamsHealAction: @MainActor (TeamsIncident) async -> Bool] = [:]
     public private(set) var persistenceFailed = false
+    public private(set) var healingFingerprints: Set<String> = []
     private let sentinelURL: URL
     private var sessionStarted = false
 
@@ -155,8 +173,17 @@ public final class TeamsDiagnostics {
     }
 
     public func report(_ incident: TeamsIncident) async {
+        let fingerprint = incident.fingerprint
+        guard !healingFingerprints.contains(fingerprint) else { return }
+        let healer = healers[TeamsHealAction(incident.kind)]
+        if healer != nil { healingFingerprints.insert(fingerprint) }
+        defer { if healer != nil { healingFingerprints.remove(fingerprint) } }
         do {
-            let record = try await log.record(incident)
+            var record = try await log.record(incident)
+            if let healer {
+                let healed = await healer(incident)
+                record = try await log.recordHeal(fingerprint: fingerprint, succeeded: healed) ?? record
+            }
             onIncident?(record)
         }
         catch { persistenceFailed = true }
