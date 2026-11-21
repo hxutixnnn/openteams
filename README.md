@@ -85,7 +85,7 @@ Return-to-send preferences for Teams and the sample workspace are separate. When
 
 Saved credentials are held in macOS Keychain behind a signed XPC helper. Downloaded chats and drafts are stored locally under `~/Library/Application Support/TeamsChat/`, separated by account. File permissions are restricted, but the local cache is **not encrypted**.
 
-Live chat traffic goes to Microsoft services. Update checks contact GitHub; builds fetch source and dependencies. There is no analytics or crash-reporting service. Never put tokens, sign-in captures, real message content or tenant identifiers in issues or screenshots.
+Live chat traffic goes to Microsoft services. Update checks contact GitHub; builds fetch source and dependencies. There is no analytics or crash-reporting service. Issue reporting to GitHub is off until you paste a token in **Settings → Issue Reporting**; reports are redacted before they are sent. Never put tokens, sign-in captures, real message content or tenant identifiers in issues or screenshots.
 
 The legacy bundle identifier and `TeamsChat` storage directory are intentionally retained for existing installations. Report security issues privately through GitHub security advisories; exclude credentials and private message content.
 
