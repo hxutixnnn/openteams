@@ -37,7 +37,7 @@ struct TeamsComposerView: View {
     }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(ConnectionIssueSchedule(clock: composer.connectionIssueClock)) { context in
             VStack(alignment: .leading, spacing: 8) {
                 if let pending = composer.outgoing[chat.id], pending.phase == .uncertain {
                     VStack(alignment: .leading, spacing: 8) {
@@ -188,6 +188,19 @@ struct TeamsComposerView: View {
         Task {
             guard store.accountScope == accountScope && store.accountRevision == accountRevision else { return }
             if let id = await store.sendDraft(in: chat.id), store.accountScope == accountScope && store.accountRevision == accountRevision { sent(id) }
+        }
+    }
+}
+
+private struct ConnectionIssueSchedule: TimelineSchedule {
+    let clock: TeamsConnectionIssueClock
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        var upcoming: Date? = startDate
+        return AnyIterator {
+            guard let current = upcoming else { return nil }
+            upcoming = clock.nextChange(after: current)
+            return current
         }
     }
 }
