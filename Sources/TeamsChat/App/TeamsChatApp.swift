@@ -97,6 +97,11 @@ struct TeamsChatApp: App {
         }
         .windowResizability(.contentSize)
 
+        Window("Send Feedback", id: "feedback") {
+            FeedbackView()
+        }
+        .windowResizability(.contentSize)
+
         Settings {
             #if DEBUG
             if TeamsPerformanceFixtureConfiguration.enabled {
