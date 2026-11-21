@@ -120,10 +120,10 @@ public actor TeamsIncidentLog {
         return record
     }
 
-    public func linkIssue(fingerprint: String, number: Int) throws {
+    public func linkIssue(fingerprint: String, number: Int, reportedOccurrences: Int? = nil) throws {
         guard let index = entries.firstIndex(where: { $0.fingerprint == fingerprint }) else { return }
         entries[index].issueNumber = number
-        entries[index].reportedOccurrences = entries[index].occurrences
+        entries[index].reportedOccurrences = min(reportedOccurrences ?? entries[index].occurrences, entries[index].occurrences)
         try save()
     }
 

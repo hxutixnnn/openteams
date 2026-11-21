@@ -135,6 +135,14 @@ private final class Clock: @unchecked Sendable {
         expect(outcomes.filter { $0 == .created(42) }.count == 1 && outcomes.contains(.skipped), "Concurrent escalations must file once: \(outcomes)")
         expect(await transport.requests.count == countBefore + 2, "Concurrent escalations sent duplicate requests")
 
+        let racing = TeamsIncident(kind: .networkFailure, subsystem: "conversation", signature: "http 503")
+        try await log.record(racing)
+        async let racingOutcome = reporter.escalate(fingerprint: racing.fingerprint)
+        try await Task.sleep(for: .milliseconds(10))
+        try await log.record(racing)
+        expect(await racingOutcome == .created(42), "Racing incident must file")
+        expect(await log.escalation(for: racing.fingerprint) == .bump(42), "A repeat during filing must stay pending")
+
         let limited = try await log.record(TeamsIncident(kind: .renderError, subsystem: "timeline", signature: "layout"))
         await transport.setFailure(429)
         expect(await reporter.escalate(fingerprint: limited.fingerprint) == .deferred, "Rate limit must defer")

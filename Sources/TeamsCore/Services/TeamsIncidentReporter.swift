@@ -31,7 +31,7 @@ public actor TeamsIncidentReporter {
         do {
             let result = try await client.fileOrBump(Self.report(for: record, environment: environment))
             lastFiled[fingerprint] = now()
-            try await log.linkIssue(fingerprint: fingerprint, number: result.issue.number)
+            try await log.linkIssue(fingerprint: fingerprint, number: result.issue.number, reportedOccurrences: record.occurrences)
             switch result {
             case .created(let issue): return .created(issue.number)
             case .bumped(let issue): return .bumped(issue.number)
