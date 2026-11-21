@@ -51,6 +51,7 @@ public final class TeamsReaderStore {
     public private(set) var accountID = ""
     public private(set) var connected = false
     public private(set) var sessionExpired = false
+    public private(set) var isReconnecting = false
     public private(set) var mediaRevision = UUID()
     public private(set) var mediaRefreshRevision = UUID()
     public private(set) var contextChatID: String?
@@ -92,6 +93,10 @@ public final class TeamsReaderStore {
     private var chatsCursor: String?
     private var generation = UUID()
     private var sessionRevision = UUID()
+    private var reconnectTask: Task<Void, Never>?
+    private var reconnectAttempt = 0
+    private var transientChatIDs: Set<String> = []
+    private var transientChatList = false
     private var creatingAccounts: Set<String> = []
     private var markingRead: [String: UUID] = [:]
     private var confirmedReadHorizons: [String: UInt64] = [:]
@@ -174,6 +179,7 @@ public final class TeamsReaderStore {
             contextBackwardLoading = false; contextForwardLoading = false
         }
         if contextNeedsRebind { renderCurrentContext() }
+        resetReconnection()
         sessionRevision = UUID()
         groupPictureLookups = [:]
         groupPictureFreshness = [:]
@@ -191,6 +197,7 @@ public final class TeamsReaderStore {
     }
 
     public func disconnect() {
+        resetReconnection()
         #if DEBUG
         cachedLoadGate?.invalidate(reason: "disconnected")
         #endif
@@ -1625,7 +1632,7 @@ public final class TeamsReaderStore {
             var history: TeamsCachedHistory
             if let existing = histories[id] { history = existing }
             else { history = try await cache.history(in: id) }
-            guard current == generation, !Task.isCancelled else { return }
+            guard current == generation, revision == sessionRevision, !Task.isCancelled else { return }
             let known = Set(history.messages.map(\.id))
             var cursor: String?
             var seen: Set<String> = []
@@ -1637,7 +1644,7 @@ public final class TeamsReaderStore {
             repeat {
                 try Task.checkCancellation()
                 let page = try await client.messages(in: id, messageToken: cursor)
-                guard current == generation, !Task.isCancelled else { return }
+                guard current == generation, revision == sessionRevision, !Task.isCancelled else { return }
                 pages += page.messages
                 pageCount += 1
                 reachedKnownMessage = reachedKnownMessage || page.messages.contains { known.contains($0.id) }
@@ -1656,11 +1663,12 @@ public final class TeamsReaderStore {
             }
             if known.isEmpty || (!reachedKnownMessage && targets.isEmpty) { history.messageToken = cursor }
             history.refreshedAt = Date()
+            recovered(chatID: id)
             histories[id] = history
             render(id)
             lastRefreshedAt = history.refreshedAt
             do { try await cache.save(history, in: id) }
-            catch { if current == generation { cacheWarning = "Messages are available for this session, but could not be saved on this Mac." } }
+            catch { if current == generation, revision == sessionRevision { cacheWarning = "Messages are available for this session, but could not be saved on this Mac." } }
         } catch {
             if current == generation && revision == sessionRevision { record(error, chatID: id) }
         }
@@ -1676,7 +1684,7 @@ public final class TeamsReaderStore {
         defer { if current == generation { loadingChatIDs.remove(id) } }
         do {
             let page = try await client.messages(in: id, messageToken: cursor)
-            guard current == generation, !Task.isCancelled else { return }
+            guard current == generation, revision == sessionRevision, !Task.isCancelled else { return }
             let next = nonempty(page.messageToken)
             guard next != cursor else { throw TeamsWebClientError.invalidPaginationToken }
             history.merge((histories[id]?.messages ?? []) + page.messages)
@@ -1684,13 +1692,14 @@ public final class TeamsReaderStore {
             histories[id] = history
             render(id)
             do { try await cache.save(history, in: id) }
-            catch { if current == generation { cacheWarning = "Older messages could not be saved on this Mac." } }
+            catch { if current == generation, revision == sessionRevision { cacheWarning = "Older messages could not be saved on this Mac." } }
         } catch {
             if current == generation && revision == sessionRevision { record(error, chatID: id) }
         }
     }
 
     private func resetAccount(accountID: String, tenantID: String, displayName: String) {
+        resetReconnection()
         #if DEBUG
         cachedLoadGate?.invalidate(reason: "account_changed")
         #endif
@@ -1797,6 +1806,7 @@ public final class TeamsReaderStore {
             guard current == generation, revision == sessionRevision, !Task.isCancelled else { return .deferred }
             if more && nonempty(page.continuationToken) == previousCursor { throw TeamsWebClientError.invalidPaginationToken }
             let refreshedChats = page.items.map { applyingConfirmedRead(to: $0) }
+            recovered()
             let wasEmpty = chats.isEmpty
             var byID = Dictionary(chats.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
             for chat in refreshedChats {
@@ -1892,9 +1902,11 @@ public final class TeamsReaderStore {
         if !silent {
             if let chatID { chatErrors[chatID] = message } else { chatListError = message }
         }
+        if let chatID { transientChatIDs.remove(chatID) } else { transientChatList = false }
         if let failure = error as? TeamsWebClientError {
             switch failure {
             case .expiredSession, .http(status: 401, retryAfter: _):
+                resetReconnection()
                 sessionExpired = true
                 connected = false
                 composer.disconnect()
@@ -1908,8 +1920,45 @@ public final class TeamsReaderStore {
                     guard let self, !Task.isCancelled, self.generation == current, self.retryNotBefore == deadline else { return }
                     self.retryNotBefore = nil
                 }
+            case .network, .http(status: 408, retryAfter: _), .http(status: 500...599, retryAfter: _):
+                isReconnecting = true
+                if let chatID { transientChatIDs.insert(chatID) } else { transientChatList = true }
+                scheduleReconnect()
             default: break
             }
+        }
+    }
+
+    private func resetReconnection() {
+        reconnectTask?.cancel(); reconnectTask = nil
+        reconnectAttempt = 0; isReconnecting = false
+        transientChatIDs = []; transientChatList = false
+    }
+
+    private func recovered(chatID: String? = nil) {
+        reconnectAttempt = 0; isReconnecting = false
+        if let chatID { transientChatIDs.remove(chatID) } else { transientChatList = false }
+        if transientChatIDs.isEmpty && !transientChatList { reconnectTask?.cancel(); reconnectTask = nil }
+    }
+
+    private func scheduleReconnect() {
+        guard reconnectTask == nil, connected, !sessionExpired else { return }
+        let current = generation, revision = sessionRevision
+        let delay = min(2 * pow(2, Double(reconnectAttempt)), 60)
+        reconnectAttempt = min(reconnectAttempt + 1, 5)
+        reconnectTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            guard let self, !Task.isCancelled, self.generation == current, self.sessionRevision == revision, self.connected else { return }
+            self.reconnectTask = nil
+            guard self.transientChatList || !self.transientChatIDs.isEmpty else { return }
+            let ids = self.transientChatIDs
+            await self.refreshChats()
+            for id in ids {
+                guard self.generation == current, self.sessionRevision == revision, self.connected, !Task.isCancelled else { return }
+                if self.transientChatIDs.contains(id) { await self.refreshConversation(id) }
+            }
+            guard self.generation == current, self.sessionRevision == revision, self.connected else { return }
+            if self.transientChatList || !self.transientChatIDs.isEmpty { self.scheduleReconnect() }
         }
     }
 
