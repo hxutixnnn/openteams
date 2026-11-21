@@ -35,14 +35,18 @@ public final class TeamsReaderStore {
         didSet {
             let currentChats = chats
             chatIndices = Dictionary(currentChats.indices.map { (currentChats[$0].id, $0) }, uniquingKeysWith: { first, _ in first })
+            let currentIDs = currentChats.map(\.id)
+            if currentIDs != chatIDs { chatIDs = currentIDs }
         }
     }
+    public private(set) var chatIDs: [String] = []
     @ObservationIgnored private var chatIndices: [String: Int] = [:]
     public private(set) var serverChatSnapshot: TeamsServerChatSnapshot?
     @ObservationIgnored public var onServerChatSnapshot: (@MainActor (TeamsServerChatSnapshot) -> Void)?
     public private(set) var conversationFolders: TeamsConversationFolders?
     public private(set) var foldersWarning: String?
     public private(set) var renderedMessages: [String: [TeamsRenderedMessage]] = [:]
+    private var renderedMessageIDs: [String: [String]] = [:]
     public private(set) var loadingChatIDs: Set<String> = []
     public private(set) var isLoadingChats = false
     public private(set) var hasMoreChats = false
@@ -231,6 +235,7 @@ public final class TeamsReaderStore {
     }
 
     public func messages(in id: String) -> [TeamsRenderedMessage] { renderedMessages[id] ?? [] }
+    public func messageIDs(in id: String) -> [String] { renderedMessageIDs[id] ?? [] }
     public func isLoadingConversation(_ id: String) -> Bool { loadingChatIDs.contains(id) || cachedLoadCounts[id, default: 0] > 0 }
     public func ownsSharePointAttachment(_ attachment: TeamsSharePointAttachment) -> Bool {
         guard attachment.accountScope == accountScope, attachment.accountRevision == accountRevision else { return false }
@@ -1616,7 +1621,7 @@ public final class TeamsReaderStore {
         guard subsystem == "conversation" else { return await refreshListReads() }
         let failedChatIDs = Array(chatErrors.keys)
         for id in failedChatIDs {
-            renderedMessages[id] = nil
+            publishRenderedMessages(nil, in: id)
             renderingInputs[id] = nil
             await loadConversation(id)
         }
@@ -1722,7 +1727,7 @@ public final class TeamsReaderStore {
                         if people == renderingPeople(in: id) {
                             composer.reconcile(history.messages, in: id)
                             renderingInputs[id] = RenderingInputs(messages: history.messages, messageIndices: prepared.indices, people: people, accountScope: scope, accountRevision: epoch)
-                            if renderedMessages[id] != prepared.messages { renderedMessages[id] = prepared.messages }
+                            if renderedMessages[id] != prepared.messages { publishRenderedMessages(prepared.messages, in: id) }
                         } else { render(id) }
                     }
                     #if DEBUG
@@ -1837,7 +1842,7 @@ public final class TeamsReaderStore {
         accountName = displayName
         cache = TeamsReadCache(root: cacheRoot, accountID: accountID, tenantID: tenantID)
         composer.restore(accountID: accountID, tenantID: tenantID)
-        chats = []; histories = [:]; renderedMessages = [:]; groupPictureLookups = [:]; groupPictureFreshness = [:]; groupPictureListMetadata = []
+        chats = []; histories = [:]; renderedMessages = [:]; renderedMessageIDs = [:]; groupPictureLookups = [:]; groupPictureFreshness = [:]; groupPictureListMetadata = []
         cachedLoadCounts = [:]
         renderingInputs = [:]
         serverChatSnapshot = nil
@@ -2004,7 +2009,13 @@ public final class TeamsReaderStore {
         }
         let messageIndices = Dictionary(messages.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
         renderingInputs[id] = RenderingInputs(messages: messages, messageIndices: messageIndices, people: people, accountScope: accountScope, accountRevision: accountRevision)
-        if renderedMessages[id] != rendered { renderedMessages[id] = rendered }
+        if renderedMessages[id] != rendered { publishRenderedMessages(rendered, in: id) }
+    }
+
+    private func publishRenderedMessages(_ messages: [TeamsRenderedMessage]?, in id: String) {
+        renderedMessages[id] = messages
+        let ids = messages?.map(\.id)
+        if renderedMessageIDs[id] != ids { renderedMessageIDs[id] = ids }
     }
 
     private func availableClient() -> TeamsWebClient? {

@@ -118,7 +118,7 @@ struct TeamsReadContentView: View {
             reconcileSelection()
             routePendingNotification()
         }
-        .onChange(of: store.chats.map(\.id)) { _, _ in reconcileSelection(); routePendingNotification() }
+        .onChange(of: store.chatIDs) { _, _ in reconcileSelection(); routePendingNotification() }
         .onChange(of: store.isLoadingChats) { _, loading in if !loading { reconcileSelection(); routePendingNotification() } }
         .onChange(of: store.retryNotBefore) { _, deadline in if deadline == nil { routePendingNotification() } }
         .alert("Notification", isPresented: Binding(get: { notificationRouter.error != nil }, set: { if !$0 { notificationRouter.clearError() } })) {
