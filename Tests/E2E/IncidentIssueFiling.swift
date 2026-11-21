@@ -38,7 +38,7 @@ private struct LeakyFailure: Error, CustomStringConvertible {
 }
 
 private final class Clock: @unchecked Sendable {
-    var now = Date(timeIntervalSince1970: 2_000_000_000)
+    var now = Date()
 }
 
 @main struct IncidentIssueFiling {
@@ -60,7 +60,7 @@ private final class Clock: @unchecked Sendable {
         let environment = GitHubIssueEnvironment(appVersion: "0.2.13 (16)", appRevision: String(repeating: "b", count: 40), osVersion: "macOS 27.0")
         let clock = Clock()
         let transport = IssueTransport()
-        let log = TeamsIncidentLog(url: root.appending(path: "incidents.json"))
+        let log = TeamsIncidentLog(url: root.appending(path: "incidents.json"), now: { clock.now })
         let client = GitHubIssueClient(tokenSource: Token(value: "github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz"), transport: transport)
         let reporter = TeamsIncidentReporter(log: log, client: client, environment: environment, bumpInterval: 3600, now: { clock.now })
 
@@ -102,6 +102,9 @@ private final class Clock: @unchecked Sendable {
         try await Task.sleep(for: .milliseconds(150))
         expect(await transport.requests.count == 2, "A repeat inside the bump interval must not comment again")
         expect(await log.escalation(for: incident.fingerprint) == .bump(42), "Throttled repeat must stay pending")
+        let relaunched = TeamsIncidentReporter(log: TeamsIncidentLog(url: root.appending(path: "incidents.json"), now: { clock.now }), client: client,
+                                               environment: environment, bumpInterval: 3600, now: { clock.now })
+        expect(await relaunched.escalate(fingerprint: incident.fingerprint) == .deferred, "A relaunch must keep the bump cooldown")
 
         clock.now += 3601
         await transport.setOpenIssue(issue["body"] as? String)

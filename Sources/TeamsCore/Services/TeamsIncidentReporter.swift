@@ -11,7 +11,6 @@ public actor TeamsIncidentReporter {
     private let bumpInterval: TimeInterval
     private let now: @Sendable () -> Date
     private var inFlight: Set<String> = []
-    private var lastFiled: [String: Date] = [:]
     private var pausedUntil: Date?
 
     public init(log: TeamsIncidentLog, client: any GitHubIssueFiling, environment: GitHubIssueEnvironment = .current(),
@@ -25,12 +24,11 @@ public actor TeamsIncidentReporter {
         let record = await log.records().first { $0.fingerprint == fingerprint }
         guard escalation != .none, let record, !inFlight.contains(fingerprint) else { return .skipped }
         if let pausedUntil, now() < pausedUntil { return .deferred }
-        if case .bump = escalation, let last = lastFiled[fingerprint], now().timeIntervalSince(last) < bumpInterval { return .deferred }
+        if case .bump = escalation, let last = record.lastReportedAt, now().timeIntervalSince(last) < bumpInterval { return .deferred }
         inFlight.insert(fingerprint)
         defer { inFlight.remove(fingerprint) }
         do {
             let result = try await client.fileOrBump(Self.report(for: record, environment: environment))
-            lastFiled[fingerprint] = now()
             try await log.linkIssue(fingerprint: fingerprint, number: result.issue.number, reportedOccurrences: record.occurrences)
             switch result {
             case .created(let issue): return .created(issue.number)

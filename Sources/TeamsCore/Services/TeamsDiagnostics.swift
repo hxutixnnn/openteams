@@ -70,6 +70,7 @@ public struct TeamsIncidentRecord: Codable, Sendable {
     public var issueNumber: Int?
     public var reportedOccurrences: Int
     public var lastHealSucceeded: Bool?
+    public var lastReportedAt: Date?
 }
 
 public enum TeamsIncidentEscalation: Equatable, Sendable {
@@ -124,6 +125,7 @@ public actor TeamsIncidentLog {
         guard let index = entries.firstIndex(where: { $0.fingerprint == fingerprint }) else { return }
         entries[index].issueNumber = number
         entries[index].reportedOccurrences = min(reportedOccurrences ?? entries[index].occurrences, entries[index].occurrences)
+        entries[index].lastReportedAt = now()
         try save()
     }
 
