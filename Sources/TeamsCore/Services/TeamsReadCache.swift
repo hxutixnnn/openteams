@@ -299,7 +299,9 @@ public actor TeamsReadCache {
     }
 
     private static func digest(_ value: String) -> String {
-        SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+        let digits = Array("0123456789abcdef".utf8)
+        let bytes = SHA256.hash(data: Data(value.utf8)).flatMap { [digits[Int($0 >> 4)], digits[Int($0 & 15)]] }
+        return String(decoding: bytes, as: UTF8.self)
     }
     private enum CacheError: Error { case incompatible, tooLarge, lockUnavailable }
 }
