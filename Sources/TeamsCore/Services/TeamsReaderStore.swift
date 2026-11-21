@@ -30,6 +30,7 @@ public enum TeamsMessageEditError: Error { case storage }
 @MainActor @Observable
 public final class TeamsReaderStore {
     public let composer: TeamsComposeStore
+    @ObservationIgnored public var diagnostics: TeamsDiagnostics?
     public private(set) var chats: [TeamsWebChat] = []
     public private(set) var serverChatSnapshot: TeamsServerChatSnapshot?
     @ObservationIgnored public var onServerChatSnapshot: (@MainActor (TeamsServerChatSnapshot) -> Void)?
@@ -1845,6 +1846,7 @@ public final class TeamsReaderStore {
 
     private func record(_ error: any Error, chatID: String? = nil, silent: Bool = false) {
         if error is CancellationError || Task.isCancelled { return }
+        if let incident = TeamsIncident(error: error, subsystem: chatID == nil ? "chatList" : "conversation"), let diagnostics { Task { await diagnostics.report(incident) } }
         let message = (error as? TeamsWebClientError)?.localizedDescription ?? "Teams could not complete this read. Try again."
         if !silent {
             if let chatID { chatErrors[chatID] = message } else { chatListError = message }

@@ -30,6 +30,10 @@ struct TeamsChatApp: App {
             .appending(path: "TeamsChat/demo-drafts.json")))
         let cacheRoot = isolated ? (isolatedRoot ?? FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)) : URL.applicationSupportDirectory.appending(path: "TeamsChat/ReadCache")
         let reader = TeamsReaderStore(cacheRoot: cacheRoot)
+        let diagnosticsRoot = showcase || isolated ? cacheRoot.appending(path: "Diagnostics/" + UUID().uuidString) : TeamsIncidentLog.defaultURL.deletingLastPathComponent()
+        let diagnostics = TeamsDiagnostics(log: TeamsIncidentLog(url: diagnosticsRoot.appending(path: "incidents.json")),
+            sentinelURL: diagnosticsRoot.appending(path: "session-active"))
+        reader.diagnostics = diagnostics
         let access: any TeamsCredentialAccess
         if !showcase, !isolated, let fingerprint = Bundle.main.object(forInfoDictionaryKey: "TeamsSigningCertificate") as? String,
            let bridge = try? TeamsCredentialBridge(certificate: fingerprint) {
@@ -37,6 +41,7 @@ struct TeamsChatApp: App {
         } else { access = TeamsUnavailableCredentialAccess() }
         _connection = ViewState(initialValue: TeamsConnection(reader: reader, credentialStore: access,
             defaults: isolated ? UserDefaults(suiteName: "OpenTeams.fixture." + UUID().uuidString)! : .standard))
+        appDelegate.diagnostics = diagnostics
     }
 
     var body: some Scene {
@@ -142,6 +147,7 @@ private struct TeamsChatRoot: View {
 }
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    var diagnostics: TeamsDiagnostics?
     let notificationRouter = TeamsNotificationRouter()
     private weak var refreshCoordinator: TeamsRefreshCoordinator?
     private var openChatWindow: (() -> Void)?
@@ -158,6 +164,7 @@ private struct TeamsChatRoot: View {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Task { await diagnostics?.beginSession() }
         #if DEBUG
         if TeamsPerformanceFixtureConfiguration.enabled {
             NSApp.setActivationPolicy(.accessory)
@@ -172,6 +179,7 @@ private struct TeamsChatRoot: View {
                                              withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
     }
+    func applicationWillTerminate(_ notification: Notification) { diagnostics?.endSession() }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                              withCompletionHandler completionHandler: @escaping @Sendable () -> Void) {
         defer { completionHandler() }
