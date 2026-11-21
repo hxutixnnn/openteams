@@ -573,12 +573,35 @@ public final class TeamsReaderStore {
     }
 
     public func refreshKnownCreation(_ id: String, expectedAccount: String, expectedRevision: UUID) async throws {
+        try await refreshChatMetadata(id, expectedAccount: expectedAccount, expectedRevision: expectedRevision)
+    }
+
+    public func resolveSearchChat(_ id: String, expectedAccount: String, expectedRevision: UUID) async throws {
+        try Task.checkCancellation()
+        guard connected, accountScope == expectedAccount, accountRevision == expectedRevision else { throw CancellationError() }
+        if conversation(id) == nil {
+            let current = generation, revision = sessionRevision
+            try await refreshChatMetadata(id, expectedAccount: expectedAccount, expectedRevision: expectedRevision, includeDeleted: false)
+            guard current == generation, revision == sessionRevision, !Task.isCancelled else { throw CancellationError() }
+            if let cache {
+                do { try await cache.save(.init(chats: chats, continuationToken: chatsCursor, refreshedAt: lastRefreshedAt)) }
+                catch {
+                    if current == generation, revision == sessionRevision { cacheWarning = "Conversations could not be saved on this Mac." }
+                }
+            }
+            guard current == generation, revision == sessionRevision, !Task.isCancelled else { throw CancellationError() }
+        }
+        guard let chat = conversation(id), chat.isConversationDeleted != true else { throw TeamsSearchError.invalidChatID }
+    }
+
+    private func refreshChatMetadata(_ id: String, expectedAccount: String, expectedRevision: UUID, includeDeleted: Bool = true) async throws {
         guard accountScope == expectedAccount, accountRevision == expectedRevision, connected, let client = availableClient() else { throw CancellationError() }
         let current = generation, revision = sessionRevision
         do {
             let chat = try await client.knownChat(id)
             guard current == generation, revision == sessionRevision, accountScope == expectedAccount,
-                  accountRevision == expectedRevision, connected else { throw CancellationError() }
+                  accountRevision == expectedRevision, connected, !Task.isCancelled else { throw CancellationError() }
+            guard includeDeleted || chat.isConversationDeleted != true else { throw TeamsSearchError.invalidChatID }
             let old = conversation(id)
             let merged = TeamsWebChat(id: id, title: chat.title ?? old?.title, chatType: chat.chatType ?? old?.chatType,
                                       threadType: old?.threadType, isOneOnOne: chat.isOneOnOne ?? old?.isOneOnOne,
@@ -589,17 +612,24 @@ public final class TeamsReaderStore {
             chats.removeAll { $0.id == id }; chats.insert(merged, at: 0)
         } catch {
             guard current == generation, revision == sessionRevision, accountScope == expectedAccount,
-                  accountRevision == expectedRevision else { throw CancellationError() }
+                  accountRevision == expectedRevision, !Task.isCancelled else { throw CancellationError() }
             if let failure = error as? TeamsWebClientError { record(failure, chatID: id) }
             throw error
         }
     }
 
-    public var canSearchServer: Bool { connected && session?.searchSession != nil }
+    private var currentSearchSession: TeamsSearchSession? {
+        guard connected, let search = session?.searchSession,
+              search.accountID.caseInsensitiveCompare(accountID) == .orderedSame,
+              search.tenantID.caseInsensitiveCompare(tenantID) == .orderedSame else { return nil }
+        return search
+    }
+
+    public var canSearchServer: Bool { currentSearchSession != nil }
     public var searchCoolingDown: Bool { searchRetryNotBefore.map { $0 > Date() } ?? false }
 
-    public func searchServer(_ query: String, in chatID: String, page: Int = 0) async throws -> TeamsMessageSearchPage {
-        guard connected, let search = session?.searchSession else { throw TeamsSearchError.invalidSession }
+    public func searchServer(_ query: String, in chatID: String? = nil, page: Int = 0) async throws -> TeamsMessageSearchPage {
+        guard let search = currentSearchSession else { throw TeamsSearchError.invalidSession }
         if let deadline = searchRetryNotBefore, deadline > Date() { throw TeamsSearchError.http(status: 429, retryAfter: deadline.timeIntervalSinceNow) }
         let current = generation, revision = sessionRevision
         do {
@@ -1444,8 +1474,10 @@ public final class TeamsReaderStore {
             }
             guard current == generation, revision == sessionRevision else { return }
             if isReaction { reacting.remove(target) }
-            if action == "unread" { await refreshChats() }
-            else if isReaction, contextChatID == chatID, contextRawMessages.contains(where: { $0.id == messageID }) { await refreshContextReaction(chatID: chatID, messageID: messageID) }
+            if action == "unread" {
+                if let index = chatIndices[chatID] { chats[index].isRead = false }
+                await refreshChats()
+            } else if isReaction, contextChatID == chatID, contextRawMessages.contains(where: { $0.id == messageID }) { await refreshContextReaction(chatID: chatID, messageID: messageID) }
             else { await refreshConversation(chatID) }
         } catch {
             guard current == generation, revision == sessionRevision else { return }
@@ -1800,13 +1832,13 @@ public final class TeamsReaderStore {
         guard case .known(let horizon, _, _) = state.horizon else { return }
         confirmedReadHorizons[chatID] = horizon
         guard let index = chats.firstIndex(where: { $0.id == chatID }),
-              isCoveredByReadHorizon(chats[index], horizon: horizon) else { return }
+              isCoveredByReadHorizon(chats[index], horizon: horizon, fallback: histories[chatID]?.messages.last) else { return }
         chats[index].isRead = true
     }
 
-    private func isCoveredByReadHorizon(_ chat: TeamsWebChat, horizon: UInt64) -> Bool {
-        guard let preview = chat.lastMessage else { return false }
-        let originalArrivalTime = preview.originalArrivalTime ?? historyMessage(in: chat.id, id: preview.id)?.originalArrivalTime
+    private func isCoveredByReadHorizon(_ chat: TeamsWebChat, horizon: UInt64, fallback: TeamsWebMessage? = nil) -> Bool {
+        guard let latest = chat.lastMessage ?? fallback else { return false }
+        let originalArrivalTime = latest.originalArrivalTime ?? historyMessage(in: chat.id, id: latest.id)?.originalArrivalTime
         guard let arrival = TeamsChatActionsClient.arrivalMilliseconds(originalArrivalTime) else { return false }
         return UInt64(arrival) <= horizon
     }

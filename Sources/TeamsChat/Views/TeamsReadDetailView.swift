@@ -5,7 +5,7 @@ struct TeamsMessageDestination: Equatable {
     let messageID: String
     let chatID: String
     let accountScope: String
-    var notificationAccountRevision: UUID? = nil
+    var initialLoadAccountRevision: UUID? = nil
     let nonce = UUID()
 }
 
@@ -47,13 +47,13 @@ struct TeamsReadDetailView: View {
 
     private var messages: [TeamsRenderedMessage] { store.messages(in: chat.id) }
     private var loading: Bool { store.isLoadingConversation(chat.id) }
-    private var hasNotificationJump: Bool {
-        jumpToMessage?.notificationAccountRevision == accountRevision && jumpToMessage?.chatID == chat.id
+    private var hasRoutedJump: Bool {
+        jumpToMessage?.initialLoadAccountRevision == accountRevision && jumpToMessage?.chatID == chat.id
     }
     private var readyMessageJump: TeamsMessageDestination? {
         guard let destination = jumpToMessage, destination.chatID == chat.id, destination.accountScope == accountScope else { return nil }
-        if destination.notificationAccountRevision != nil {
-            guard hasNotificationJump, initialLoadComplete else { return nil }
+        if destination.initialLoadAccountRevision != nil {
+            guard hasRoutedJump, initialLoadComplete else { return nil }
         }
         return destination
     }
@@ -171,7 +171,7 @@ struct TeamsReadDetailView: View {
         Task { @MainActor in
             await Task.yield()
             guard scrollIntentRevision == intent, selectedChatID == chat.id, store.accountScope == accountScope,
-                  store.accountRevision == accountRevision, restoreAnchor == nil, !hasNotificationJump,
+                  store.accountRevision == accountRevision, restoreAnchor == nil, !hasRoutedJump,
                   initial ? !userHasScrolled : atBottom else { return }
             proxy.scrollTo(id, anchor: .bottom)
         }
@@ -352,7 +352,7 @@ struct TeamsReadDetailView: View {
               store.accountScope == destination.accountScope, store.accountRevision == accountRevision else { return }
         let id = destination.messageID
         if messages.contains(where: { $0.id == id }) {
-            if destination.notificationAccountRevision != nil { showMessageContext = false }
+            if destination.initialLoadAccountRevision != nil { showMessageContext = false }
             withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(id, anchor: .center) }
         } else {
             showMessageContext = true

@@ -71,7 +71,7 @@ Open **Settings → Sample Workspace** to try fictional conversations. For live 
 | Shortcut | Action |
 | --- | --- |
 | ⌘F | Find in the current conversation |
-| ⌥⌘F | Search loaded chat names from the window toolbar |
+| ⌥⌘F | Find loaded chats or search Teams messages across conversations |
 | ⌘L | Focus the composer |
 | ⌘Return | Send |
 | ⌥⌘I | Toggle conversation details |

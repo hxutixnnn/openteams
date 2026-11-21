@@ -8,6 +8,7 @@ struct TeamsReadSidebar: View {
     let connect: () -> Void
     let newChat: () -> Void
     var searchSubmission: UUID? = nil
+    var openSearchResult: ((String, String, UUID) async throws -> Void)? = nil
     @ViewState<Bool> private var unreadOnly = false
     @ViewState<Bool> private var draftsOnly = false
     @ViewState<[String: Bool]> private var expandedFolders = [:]
@@ -63,14 +64,26 @@ struct TeamsReadSidebar: View {
             if filter.isEmpty {
                 sidebarSections
             } else {
-                Section("Search Results") { ForEach(results) { row($0) } }
+                Section("Loaded Chats") {
+                    if results.isEmpty { Text("No matching loaded chats").foregroundStyle(.secondary) }
+                    ForEach(results) { row($0) }
+                }
+                if let openSearchResult {
+                    if store.canSearchServer {
+                        TeamsGlobalMessageResults(store: store, query: filter, accountRevision: store.accountRevision,
+                                                  submission: searchSubmission, open: openSearchResult)
+                            .id(store.accountRevision.uuidString + ":" + filter)
+                    } else {
+                        Section("Teams Messages") {
+                            Text("Teams message search is unavailable.").foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
         }
         .listStyle(.sidebar)
         .overlay {
-            if !filter.isEmpty && results.isEmpty {
-                ContentUnavailableView.search(text: filter)
-            } else if unreadOnly && filter.isEmpty && chats.isEmpty && !hasFolderResults && store.selfChat?.isRead != false {
+            if unreadOnly && filter.isEmpty && chats.isEmpty && !hasFolderResults && store.selfChat?.isRead != false {
                 ContentUnavailableView("No unread chats", systemImage: "checkmark.bubble", description: Text("You're all caught up."))
             } else if draftsOnly && filter.isEmpty && chats.isEmpty && !hasFolderResults && !(store.selfChat.map { matches($0) } ?? false) {
                 ContentUnavailableView("No local drafts", systemImage: "doc.text", description: Text("Drafts saved on this Mac appear here."))
@@ -78,7 +91,7 @@ struct TeamsReadSidebar: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) { sidebarHeader }
         .onChange(of: searchSubmission) { _, _ in
-            if let result = results.first { selection = result.id }
+            if !store.canSearchServer || openSearchResult == nil, let result = results.first { selection = result.id }
         }
         .onChange(of: store.accountScope) { _, _ in expandedFolders = [:]; draftsOnly = false }
     }
