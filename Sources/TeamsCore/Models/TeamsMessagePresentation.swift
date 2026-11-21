@@ -281,8 +281,19 @@ private struct BodyTraversal {
     mutating func visit(_ node: Node, style: TeamsTextRun, depth: Int = 0) {
         guard depth < 100 else { unsupported = true; return }
         if let text = node as? TextNode {
-            let value = kind == .code ? text.getWholeText()
-                : text.getWholeText().replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            let original = text.getWholeText()
+            var value = original
+            if kind != .code {
+                var previousWasSpace = false
+                for scalar in original.unicodeScalars {
+                    let isSpace = scalar == " "
+                    if (isSpace && previousWasSpace) || (!isSpace && scalar.properties.isWhitespace) {
+                        value = original.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                        break
+                    }
+                    previousWasSpace = isSpace
+                }
+            }
             append(value, style: style)
             return
         }
