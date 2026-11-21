@@ -96,7 +96,7 @@ private struct GitHubIssueReportingSection: View {
                     .disabled(GitHubTokenStore.normalized(draft) == nil)
             }
             if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
-            Text("Used only to file issues in \(GitHubIssueClient.defaultRepository). Create a fine-grained token for that repository with Issues read and write access. Tokens, message text and personal details are removed before anything is sent.")
+            Text("Used only to file issues in \(GitHubIssueClient.defaultRepository). Create a fine-grained token for that repository with Issues read and write access. With a token saved, problems that automatic recovery cannot fix, or that keep repeating, are filed there automatically. Tokens, message text and personal details are removed before anything is sent.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .onAppear { saved = GitHubTokenStore.contains() }

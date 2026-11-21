@@ -55,6 +55,7 @@ actor FlakyTransport: HTTPTransport {
         try await diagnosticsRecordsHealOutcomes(root: root)
         try await readerHealsRecoverableFailures(root: root)
         try await liveIncidentIsHealedInPlace(root: root)
+        try await laterRecoveryHealsFailedIncident(root: root)
         print("Heal mapping, outcome recording, in-flight suppression, retry, view reset, resync, and live heal workflows: PASS")
     }
 
@@ -161,6 +162,26 @@ actor FlakyTransport: HTTPTransport {
         expect(record.occurrences == 1 && record.lastHealSucceeded == true && record.heals == 1, "Live heal must succeed and be recorded once")
         expect(reader.chatListError == nil && reader.chats.count == 1, "Reader must recover in place")
         expect(await log.escalation(for: record.fingerprint) == .none, "Healed live incident must not escalate")
+        reader.disconnect()
+    }
+
+    @MainActor static func laterRecoveryHealsFailedIncident(root: URL) async throws {
+        let log = TeamsIncidentLog(url: root.appending(path: "later.json"))
+        let diagnostics = TeamsDiagnostics(log: log, sentinelURL: root.appending(path: "later-session"))
+        let reader = store(FlakyTransport(chatFailures: 1), root: root)
+        reader.diagnostics = diagnostics
+        var delivered: [TeamsIncidentRecord] = []
+        diagnostics.onIncident = { delivered.append($0) }
+        diagnostics.healers[.retryWithBackoff] = { _ in false }
+        await reader.connect(session: session())
+        let deadline = Date().addingTimeInterval(10)
+        while delivered.isEmpty && Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        guard let fingerprint = delivered.first?.fingerprint else { preconditionFailure("Failed heal must be delivered") }
+        expect(await log.escalation(for: fingerprint) == .file, "Exhausted heal must escalate")
+        expect(await reader.retryFailedReads(in: "chatList", delays: [0.01]), "Later refresh must recover")
+        while await log.escalation(for: fingerprint) != .none && Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        let record = await log.records().first { $0.fingerprint == fingerprint }
+        expect(record?.lastHealSucceeded == true && record?.heals == 1, "Recovery after a failed heal must be recorded as healed")
         reader.disconnect()
     }
 }

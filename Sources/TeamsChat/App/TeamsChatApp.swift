@@ -33,6 +33,9 @@ struct TeamsChatApp: App {
         let diagnosticsRoot = showcase || isolated ? cacheRoot.appending(path: "Diagnostics/" + UUID().uuidString) : TeamsIncidentLog.defaultURL.deletingLastPathComponent()
         let diagnostics = TeamsDiagnostics(log: TeamsIncidentLog(url: diagnosticsRoot.appending(path: "incidents.json")),
             sentinelURL: diagnosticsRoot.appending(path: "session-active"))
+        if !showcase, !isolated {
+            diagnostics.reporter = TeamsIncidentReporter(log: diagnostics.log, client: GitHubIssueClient.keychainBacked())
+        }
         reader.diagnostics = diagnostics
         let access: any TeamsCredentialAccess
         if !showcase, !isolated, let fingerprint = Bundle.main.object(forInfoDictionaryKey: "TeamsSigningCertificate") as? String,
