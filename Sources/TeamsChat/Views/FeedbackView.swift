@@ -64,7 +64,17 @@ struct FeedbackView: View {
         .frame(width: 480)
         .disabled(sending)
         .interactiveDismissDisabled(sending)
-        .onAppear { hasToken = GitHubTokenStore.contains() }
+        .onAppear {
+            title = ""
+            details = ""
+            includeScreenshot = false
+            hasToken = GitHubTokenStore.contains()
+            sending = false
+            error = nil
+            tokenRejected = false
+            screenshotCaptureFailed = false
+            issueURL = nil
+        }
         .onChange(of: activeState) { _, state in
             if state != .inactive { hasToken = GitHubTokenStore.contains() }
         }
