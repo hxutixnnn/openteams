@@ -15,6 +15,8 @@ final class TeamsRefreshCoordinator {
     private var policy: TeamsRefreshPolicy
     private let stallThreshold: TimeInterval
     private var reportedStall = false
+    private var refreshExpectedSince: Date?
+    private var refreshAccountScope: String?
 
     init(reader: TeamsReaderStore, defaults: UserDefaults = .standard, tickInterval: TimeInterval = 15, maintenanceInterval: TimeInterval = 60) {
         self.reader = reader; self.defaults = defaults; self.tickInterval = max(1, tickInterval)
@@ -60,10 +62,11 @@ final class TeamsRefreshCoordinator {
     }
     func stop() {
         loop?.cancel(); loop = nil
+        refreshExpectedSince = nil; reportedStall = false
         for (center, observer) in observers { center.removeObserver(observer) }
         observers = []; reader.onServerChatSnapshot = nil
     }
-    func reset() { TeamsNotifications.reset(); policy.reset() }
+    func reset() { TeamsNotifications.reset(); policy.reset(); refreshExpectedSince = nil; reportedStall = false }
     func refreshNow() { policy.forceMaintenance(); tick() }
     private func received(_ snapshot: TeamsServerChatSnapshot) {
         guard reader.connected, snapshot.accountScope == reader.accountScope else { return }
@@ -76,17 +79,27 @@ final class TeamsRefreshCoordinator {
         }
     }
     func tick(at now: Date = Date()) {
-        let stalled = reader.connected && reader.lastRefreshedAt.map { now.timeIntervalSince($0) > stallThreshold } == true
-        if stalled, !reportedStall, let diagnostics = reader.diagnostics {
-            Task { await diagnostics.report(TeamsIncident(kind: .stalledSync, subsystem: "refresh", signature: "stalledSync", occurredAt: now)) }
-        }
-        reportedStall = stalled
         let activeChats = Set(windows.values.filter(\.active).map(\.chatID).filter { !$0.isEmpty })
         let hasActiveWindow = windows.values.contains { $0.active }
         let notifications = defaults.bool(forKey: "teamsNotificationsEnabled")
         let decision = policy.decide(at: now, accountScope: reader.accountScope, connected: reader.connected,
                                      hasActiveWindow: hasActiveWindow, activeChatIDs: activeChats, notificationsEnabled: notifications)
         let account = reader.accountScope
+        if !reader.connected || !(hasActiveWindow || notifications) || refreshAccountScope != account {
+            refreshExpectedSince = nil; reportedStall = false
+        }
+        refreshAccountScope = account
+        if reader.connected, hasActiveWindow || notifications {
+            if refreshExpectedSince == nil { refreshExpectedSince = now }
+            if let refreshExpectedSince, let lastRefreshedAt = reader.lastRefreshedAt {
+                let stalled = now.timeIntervalSince(max(lastRefreshedAt, refreshExpectedSince)) > stallThreshold
+                if decision.refreshLists, stalled, !reportedStall, let diagnostics = reader.diagnostics {
+                    Task { await diagnostics.report(TeamsIncident(kind: .stalledSync, subsystem: "refresh", signature: "stalledSync", occurredAt: now)) }
+                    reportedStall = true
+                }
+                if !stalled { reportedStall = false }
+            }
+        }
         if decision.refreshLists {
             Task { guard reader.accountScope == account, reader.connected else { return }; await reader.refreshChats() }
             Task { guard reader.accountScope == account, reader.connected else { return }; await reader.refreshConversationFolders() }
