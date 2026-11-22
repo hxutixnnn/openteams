@@ -23,9 +23,7 @@ public enum TeamsChatListPresentation {
 
     public static func timestampLabel(for date: Date?, now: Date = Date(), calendar: Calendar = .current, locale: Locale = .current) -> String? {
         guard let date else { return nil }
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
-        let template = days == 1 ? nil : days == 0 ? "jm" : (2..<7).contains(days) ? "EEEE" : "Md"
-        return timestampFormatters.string(from: date, template: template, calendar: calendar, locale: locale)
+        return timestampFormatters.string(from: date, now: now, calendar: calendar, locale: locale)
     }
 }
 
@@ -70,8 +68,34 @@ private final class TimestampFormatters: @unchecked Sendable {
         }
     }
 
+    private struct DayBoundaries {
+        let sixDaysAgo: Date
+        let yesterday: Date
+        let today: Date
+        let tomorrow: Date
+
+        init(containing now: Date, calendar: Calendar) {
+            let today = calendar.startOfDay(for: now)
+            func start(_ days: Int) -> Date { calendar.date(byAdding: .day, value: days, to: today).map(calendar.startOfDay) ?? today }
+            self.today = today
+            tomorrow = start(1)
+            yesterday = start(-1)
+            sixDaysAgo = start(-6)
+        }
+
+        func contains(_ now: Date) -> Bool { today <= now && now < tomorrow }
+
+        func template(for date: Date) -> String? {
+            if today <= date && date < tomorrow { return "jm" }
+            if yesterday <= date && date < today { return nil }
+            if sixDaysAgo <= date && date < yesterday { return "EEEE" }
+            return "Md"
+        }
+    }
+
     private let lock = NSLock()
     private var formatters: [Key: Formatter] = [:]
+    private var dayBoundaries: [Calendar: DayBoundaries] = [:]
     private var observers: [NSObjectProtocol] = []
 
     init() {
@@ -86,13 +110,22 @@ private final class TimestampFormatters: @unchecked Sendable {
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
     }
 
-    func string(from date: Date, template: String?, calendar: Calendar, locale: Locale) -> String {
-        let key = Key(template: template, calendar: calendar, locale: locale)
+    func string(from date: Date, now: Date, calendar: Calendar, locale: Locale) -> String {
         if locale == .autoupdatingCurrent || calendar == .autoupdatingCurrent || calendar.locale == .autoupdatingCurrent || calendar.timeZone == .autoupdatingCurrent {
-            return makeFormatter(for: key).string(from: date)
+            let template = DayBoundaries(containing: now, calendar: calendar).template(for: date)
+            return makeFormatter(for: Key(template: template, calendar: calendar, locale: locale)).string(from: date)
         }
         lock.lock()
         defer { lock.unlock() }
+        let days: DayBoundaries
+        if let cached = dayBoundaries[calendar], cached.contains(now) {
+            days = cached
+        } else {
+            days = DayBoundaries(containing: now, calendar: calendar)
+            if dayBoundaries.count >= 64 { dayBoundaries.removeAll(keepingCapacity: true) }
+            dayBoundaries[calendar] = days
+        }
+        let key = Key(template: days.template(for: date), calendar: calendar, locale: locale)
         if let formatter = formatters[key] { return formatter.string(from: date) }
         let formatter = makeFormatter(for: key)
         if formatters.count >= 64 { formatters.removeAll(keepingCapacity: true) }
@@ -122,5 +155,6 @@ private final class TimestampFormatters: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         formatters.removeAll(keepingCapacity: true)
+        dayBoundaries.removeAll(keepingCapacity: true)
     }
 }
