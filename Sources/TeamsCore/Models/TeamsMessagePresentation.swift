@@ -230,7 +230,13 @@ public enum TeamsBodyParser {
         }
         var parser = BodyTraversal()
         parser.unsupported = truncated
-        if input.utf8.contains(where: { $0 == 0 || $0 == 38 || $0 == 60 }) || input.unicodeScalars.contains("\u{ffff}") {
+        if let paragraphs = plainParagraphs(input), let paragraphTag = try? Tag.valueOf("p") {
+            for text in paragraphs {
+                let paragraph = Element(paragraphTag, [])
+                if !text.isEmpty { try? paragraph.appendChild(TextNode(String(text), nil)) }
+                parser.visit(paragraph, style: .init(text: ""))
+            }
+        } else if !isPlainText(input) {
             guard let document = try? SwiftSoup.parseBodyFragment(input), let body = document.body() else {
                 return .init(text: "Message content is unavailable.", blocks: [], hasUnsupportedContent: true)
             }
@@ -243,6 +249,23 @@ public enum TeamsBodyParser {
         let text = blocks.map(\.text).joined(separator: "\n")
         return .init(text: text.isEmpty ? "Message content is unavailable." : text,
                      blocks: blocks, hasUnsupportedContent: parser.unsupported || text.isEmpty)
+    }
+
+    private static func isPlainText(_ text: some StringProtocol) -> Bool {
+        !text.utf8.contains(where: { $0 == 0 || $0 == 38 || $0 == 60 }) && !text.unicodeScalars.contains("\u{ffff}")
+    }
+
+    private static func plainParagraphs(_ html: String) -> [Substring]? {
+        var paragraphs: [Substring] = []
+        var rest = html[...]
+        while !rest.isEmpty {
+            guard rest.hasPrefix("<p>"), let end = rest.range(of: "</p>") else { return nil }
+            let text = rest[rest.index(rest.startIndex, offsetBy: 3)..<end.lowerBound]
+            guard isPlainText(text) else { return nil }
+            paragraphs.append(text)
+            rest = rest[end.upperBound...]
+        }
+        return paragraphs.isEmpty ? nil : paragraphs
     }
 }
 
