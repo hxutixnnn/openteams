@@ -138,12 +138,14 @@ public struct TeamsRenderedMessage: Identifiable, Hashable, Sendable {
         }
     }
 
+    private static func decodedList(_ value: TeamsWebJSONValue?) -> TeamsWebJSONValue? {
+        guard case let .string(encoded)? = value else { return value }
+        guard encoded != "[]", !encoded.isEmpty, encoded.utf8.count <= 128_000 else { return nil }
+        return try? JSONDecoder().decode(TeamsWebJSONValue.self, from: Data(encoded.utf8))
+    }
+
     private static func reactionList(_ value: TeamsWebJSONValue?) -> [TeamsMessageReaction] {
-        let raw: TeamsWebJSONValue?
-        if case let .string(encoded)? = value, encoded.utf8.count <= 128_000 {
-            raw = try? JSONDecoder().decode(TeamsWebJSONValue.self, from: Data(encoded.utf8))
-        } else { raw = value }
-        guard case let .array(items)? = raw else { return [] }
+        guard case let .array(items)? = decodedList(value) else { return [] }
         var seen = Set<String>()
         return items.prefix(100).compactMap { item in
             guard case let .object(fields) = item, let key = fields["key"]?.stringValue, !key.isEmpty,
@@ -158,11 +160,7 @@ public struct TeamsRenderedMessage: Identifiable, Hashable, Sendable {
     }
 
     private static func fileLinks(_ value: TeamsWebJSONValue?, accountScope: String?, accountRevision: UUID?, chatID: String?, messageID: String, contextRevision: UUID?) -> [TeamsFileLink] {
-        let raw: TeamsWebJSONValue?
-        if case let .string(encoded)? = value, encoded.utf8.count <= 128_000 {
-            raw = try? JSONDecoder().decode(TeamsWebJSONValue.self, from: Data(encoded.utf8))
-        } else { raw = value }
-        guard case let .array(items)? = raw else { return [] }
+        guard case let .array(items)? = decodedList(value) else { return [] }
         var seen = Set<URL>()
         return items.prefix(50).compactMap { item in
             guard case let .object(fields) = item else { return nil }
