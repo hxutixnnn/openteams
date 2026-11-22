@@ -1533,6 +1533,11 @@ public final class TeamsReaderStore {
                             isOneOnOne: true, members: [.init(mri: "8:orgid:" + accountID, objectId: accountID, displayName: accountName)])
     }
 
+    public var chatRanks: [String: Int] {
+        access(keyPath: \.chats)
+        return chatIndices
+    }
+
     public func conversation(_ id: String) -> TeamsWebChat? {
         if id == "48:notes" { return selfChat }
         let currentChats = chats
