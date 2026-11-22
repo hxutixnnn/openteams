@@ -2,13 +2,13 @@ import Foundation
 
 public enum TeamsChatListPresentation {
     private static let timestampFormatters = TimestampFormatters()
+    private static let previewTexts = PreviewTexts()
 
     public static func preview(for chat: TeamsWebChat, accountID: String) -> String? {
         guard let message = chat.lastMessage, !TeamsRenderedMessage.isDeleted(message), let content = message.content, !content.isEmpty else { return nil }
         let type = (message.messageType ?? message.contentType ?? "").lowercased()
         guard type == "text" || type == "richtext" || type == "richtext/html" else { return nil }
-        let body = TeamsBodyParser.parse(content, messageType: type == "text" ? "Text" : "RichText/Html")
-        let text = body.blocks.map(\.text).joined(separator: " ").split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        let text = previewTexts.text(for: content, isPlainText: type == "text")
         guard !text.isEmpty else { return nil }
         let sender = (message.senderID ?? "").lowercased()
         let account = accountID.lowercased()
@@ -26,6 +26,28 @@ public enum TeamsChatListPresentation {
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
         let template = days == 1 ? nil : days == 0 ? "jm" : (2..<7).contains(days) ? "EEEE" : "Md"
         return timestampFormatters.string(from: date, template: template, calendar: calendar, locale: locale)
+    }
+}
+
+private final class PreviewTexts: @unchecked Sendable {
+    private struct Key: Hashable {
+        let content: String
+        let isPlainText: Bool
+    }
+
+    private let lock = NSLock()
+    private var texts: [Key: String] = [:]
+
+    func text(for content: String, isPlainText: Bool) -> String {
+        let key = Key(content: content, isPlainText: isPlainText)
+        if let text = lock.withLock({ texts[key] }) { return text }
+        let body = TeamsBodyParser.parse(content, messageType: isPlainText ? "Text" : "RichText/Html")
+        let text = body.blocks.map(\.text).joined(separator: " ").split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        lock.withLock {
+            if texts.count >= 2_048 { texts.removeAll(keepingCapacity: true) }
+            texts[key] = text
+        }
+        return text
     }
 }
 
