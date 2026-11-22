@@ -210,10 +210,15 @@ public struct TeamsWebMessage: Codable, Identifiable, Hashable, Sendable {
             guard seconds <= Date.distantFuture.timeIntervalSince1970 else { return nil }
             return Date(timeIntervalSince1970: seconds)
         }
+        return fractionalArrivalFormatter.date(from: value) ?? arrivalFormatter.date(from: value)
+    }
+
+    nonisolated(unsafe) private static let fractionalArrivalFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
-    }
+        return formatter
+    }()
+    nonisolated(unsafe) private static let arrivalFormatter = ISO8601DateFormatter()
 }
 
 public struct TeamsWebChat: Codable, Identifiable, Hashable, Sendable {
