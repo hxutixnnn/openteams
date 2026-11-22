@@ -58,11 +58,11 @@ public enum TeamsWebJSONValue: Codable, Hashable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() { self = .null }
-        else if let value = try? container.decode(Bool.self) { self = .bool(value) }
         else if let value = try? container.decode(String.self) { self = .string(value) }
-        else if let value = try? container.decode(Decimal.self) { self = .number(value) }
         else if let value = try? container.decode([String: Self].self) { self = .object(value) }
         else if let value = try? container.decode([Self].self) { self = .array(value) }
+        else if let value = try? container.decode(Bool.self) { self = .bool(value) }
+        else if let value = try? container.decode(Decimal.self) { self = .number(value) }
         else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value.")
         }
