@@ -377,10 +377,15 @@ private struct BodyTraversal {
             reply = nil
             if (try? element.attr("itemtype")) == "http://schema.skype.com/Reply" {
                 let id = (try? element.attr("itemid")) ?? ""
-                let author = (try? element.select("[itemprop=mri]").first()?.text()) ?? ""
-                let sender = (try? element.select("[itemprop=mri]").first()?.attr("itemid")) ?? ""
-                let preview = (try? element.select("[itemprop=preview]").first()).flatMap { $0 }.map { excerptText($0) } ?? ""
-                let time = (try? element.select("[itemprop=time]").first()?.attr("itemid")) ?? ""
+                func firstItem(_ name: String) -> Element? {
+                    guard let evaluator = try? Evaluator.AttributeWithValue("itemprop", name) else { return nil }
+                    return (try? CssSelector.select(evaluator, element))?.first()
+                }
+                let mri = firstItem("mri")
+                let author = (try? mri?.text()) ?? ""
+                let sender = (try? mri?.attr("itemid")) ?? ""
+                let preview = firstItem("preview").map { excerptText($0) } ?? ""
+                let time = (try? firstItem("time")?.attr("itemid")) ?? ""
                 let milliseconds = Double(time)
                 let date = milliseconds.flatMap { value -> Date? in
                     guard value.isFinite, value > 0, value < 100_000_000_000_000 else { return nil }
