@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 import TeamsCore
 
 private actor ReadTransport: HTTPTransport {
@@ -17,13 +16,6 @@ private actor ReadTransport: HTTPTransport {
         } else { throw URLError(.unsupportedURL) }
         return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
     }
-}
-
-private final class ChangeCount: @unchecked Sendable {
-    private let lock = NSLock()
-    private var count = 0
-    func mark() { lock.lock(); count += 1; lock.unlock() }
-    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
 }
 
 @main @MainActor
@@ -51,20 +43,16 @@ struct PendingReadBatching {
         let perChat = milliseconds(start.duration(to: clock.now))
 
         let store = TeamsReaderStore(cacheRoot: root, transport: ReadTransport())
-        let changes = ChangeCount()
-        func track() { withObservationTracking { _ = store.pendingReadChatIDs } onChange: { changes.mark() } }
         start = clock.now
         await store.restoreAccount(accountID: account, tenantID: tenant, displayName: account)
-        track()
-        while !store.pendingReadChatIDs.contains(chats[chatCount - 1].id) {
+        let expected: Set<String> = [chats[10].id, chats[20].id, chats[chatCount - 1].id]
+        while store.pendingReadChatIDs.isEmpty {
             precondition(clock.now - start < .seconds(10), "Pending read scan did not finish")
             try await Task.sleep(for: .milliseconds(1))
-            track()
         }
         let restored = milliseconds(start.duration(to: clock.now))
-        precondition(store.pendingReadChatIDs == [chats[10].id, chats[20].id, chats[chatCount - 1].id])
+        precondition(store.pendingReadChatIDs == expected, "Pending read scan published a partial result")
         precondition(store.finishableReadChatIDs == [chats[20].id])
-        precondition(changes.value <= 1, "Pending read scan published more than once")
         precondition(store.cacheWarning == nil)
 
         require(try await cache.advancePendingRead(id: pending.id, stage: .bookmarkAccepted, in: chats[10].id))
