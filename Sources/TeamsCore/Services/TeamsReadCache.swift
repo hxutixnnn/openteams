@@ -76,10 +76,12 @@ public struct TeamsCachedHistory: Codable, Sendable {
                let old = Decimal(string: existing.version ?? ""), let new = Decimal(string: message.version ?? ""), new < old { continue }
             byID[message.id] = message
         }
-        messages = byID.values.sorted {
-            let left = $0.arrivalDate ?? .distantPast, right = $1.arrivalDate ?? .distantPast
-            return left == right ? $0.id < $1.id : left < right
+        let merged = Array(byID.values)
+        let order = merged.indices.sorted {
+            let left = merged[$0].arrivalDate ?? .distantPast, right = merged[$1].arrivalDate ?? .distantPast
+            return left == right ? merged[$0].id < merged[$1].id : left < right
         }
+        messages = order.map { merged[$0] }
     }
 }
 
