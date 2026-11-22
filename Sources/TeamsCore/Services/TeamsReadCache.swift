@@ -93,6 +93,7 @@ public actor TeamsReadCache {
         let payload: Value
     }
     private let directory: URL
+    private var savedHistories: [String: (history: TeamsCachedHistory, file: Int)] = [:]
     private let accountID: String
     private let tenantID: String
 
@@ -291,12 +292,29 @@ public actor TeamsReadCache {
     public func save(_ folders: TeamsConversationFolders) throws { try write(folders, name: "folders") }
 
     public func history(in chatID: String) throws -> TeamsCachedHistory {
-        try read("chat-" + Self.digest(chatID), as: TeamsCachedHistory.self) ?? TeamsCachedHistory()
+        let name = "chat-" + Self.digest(chatID)
+        let file = fileNumber(name)
+        guard let history = try read(name, as: TeamsCachedHistory.self) else { return TeamsCachedHistory() }
+        savedHistories[name] = file.map { (history, $0) }
+        return history
     }
 
     public func save(_ chats: TeamsCachedChats) throws { try write(chats, name: "chats") }
     public func save(_ history: TeamsCachedHistory, in chatID: String) throws {
-        try write(history, name: "chat-" + Self.digest(chatID))
+        let name = "chat-" + Self.digest(chatID)
+        if let saved = savedHistories[name], saved.history.messageToken == history.messageToken,
+           saved.history.messages == history.messages, fileNumber(name) == saved.file {
+            savedHistories[name] = (history, saved.file)
+            return
+        }
+        savedHistories[name] = nil
+        try write(history, name: name)
+        savedHistories[name] = fileNumber(name).map { (history, $0) }
+    }
+
+    private func fileNumber(_ name: String) -> Int? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent(name + ".json").path)
+        return (attributes?[.systemFileNumber] as? NSNumber)?.intValue
     }
 
     private func read<Value: Codable>(_ name: String, as: Value.Type) throws -> Value? {
