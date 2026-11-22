@@ -133,9 +133,11 @@ public actor TeamsReadCache {
         try read(deletionName(chatID, messageID), as: TeamsPendingDeletionRecord.self)?.intent
     }
     public func pendingDeletions(in chatID: String, messageIDs: [String]) -> [String: Result<TeamsPendingDeletion?, any Error>] {
-        let names = Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+        let names: Set<String>?
+        do { names = Set(try FileManager.default.contentsOfDirectory(atPath: directory.path)) }
+        catch { names = FileManager.default.fileExists(atPath: directory.path) ? nil : [] }
         var deletions: [String: Result<TeamsPendingDeletion?, any Error>] = [:]
-        for messageID in messageIDs where names.contains(deletionName(chatID, messageID) + ".json") {
+        for messageID in messageIDs where names?.contains(deletionName(chatID, messageID) + ".json") ?? true {
             deletions[messageID] = Result { try pendingDeletion(in: chatID, messageID: messageID) }
         }
         return deletions
