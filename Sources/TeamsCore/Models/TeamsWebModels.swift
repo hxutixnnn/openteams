@@ -210,9 +210,42 @@ public struct TeamsWebMessage: Codable, Identifiable, Hashable, Sendable {
             guard seconds <= Date.distantFuture.timeIntervalSince1970 else { return nil }
             return Date(timeIntervalSince1970: seconds)
         }
-        return fractionalArrivalFormatter.date(from: value) ?? arrivalFormatter.date(from: value)
+        return canonicalArrivalDate(value) ?? fractionalArrivalFormatter.date(from: value) ?? arrivalFormatter.date(from: value)
     }
 
+    private static func canonicalArrivalDate(_ value: String) -> Date? {
+        let bytes = Array(value.utf8)
+        guard (20...64).contains(bytes.count) else { return nil }
+        func isDigit(_ index: Int) -> Bool { index < bytes.count && (48...57).contains(bytes[index]) }
+        func number(_ range: Range<Int>) -> Int? {
+            range.allSatisfy(isDigit) ? range.reduce(0) { $0 * 10 + Int(bytes[$1] - 48) } : nil
+        }
+        guard bytes[4] == UInt8(ascii: "-"), bytes[7] == UInt8(ascii: "-"), bytes[10] == UInt8(ascii: "T"),
+              bytes[13] == UInt8(ascii: ":"), bytes[16] == UInt8(ascii: ":"),
+              number(0..<4) != nil, number(5..<7) != nil, number(8..<10) != nil,
+              let hour = number(11..<13), hour < 24, let minute = number(14..<16), minute < 60,
+              let second = number(17..<19), second < 60 else { return nil }
+        var zoneStart = 19
+        var milliseconds = 0
+        if bytes[19] == UInt8(ascii: ".") {
+            zoneStart = 20
+            while isDigit(zoneStart) {
+                if zoneStart < 23 { milliseconds += Int(bytes[zoneStart] - 48) * [100, 10, 1][zoneStart - 20] }
+                zoneStart += 1
+            }
+            guard zoneStart > 20 else { return nil }
+        }
+        let zone = bytes[zoneStart...]
+        let isUTC = zone.count == 1 && (zone.first == UInt8(ascii: "Z") || zone.first == UInt8(ascii: "z"))
+        let hasSign = zone.first == UInt8(ascii: "+") || zone.first == UInt8(ascii: "-")
+        let isOffset = hasSign && (zone.count == 5 && number(zoneStart + 1..<zoneStart + 5) != nil
+            || zone.count == 6 && bytes[zoneStart + 3] == UInt8(ascii: ":") && number(zoneStart + 1..<zoneStart + 3) != nil && number(zoneStart + 4..<zoneStart + 6) != nil)
+        guard isUTC || isOffset,
+              let whole = try? arrivalStyle.parse(String(decoding: bytes[0..<19] + zone, as: UTF8.self)) else { return nil }
+        return Date(timeIntervalSince1970: (whole.timeIntervalSince1970 * 1_000 + Double(milliseconds)) / 1_000)
+    }
+
+    private static let arrivalStyle = Date.ISO8601FormatStyle()
     nonisolated(unsafe) private static let fractionalArrivalFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
