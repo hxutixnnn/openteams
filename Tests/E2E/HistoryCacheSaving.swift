@@ -97,6 +97,10 @@ struct HistoryCacheSaving {
         try await expectWrite(root, reopened, failed, "retry after a failed save")
         try await expectWrite(root, reopened, restored, "return to an earlier history")
 
+        let other = TeamsReadCache(root: root, accountID: "account", tenantID: "tenant")
+        try await expectWrite(root, other, history, "another cache replaces the file")
+        try await expectWrite(root, reopened, restored, "unchanged history after another cache replaced the file")
+
         let fresh = TeamsReadCache(root: root, accountID: "account", tenantID: "tenant")
         try await expectWrite(root, fresh, restored, "first save by a new cache")
 
@@ -113,6 +117,6 @@ struct HistoryCacheSaving {
         }
         let final = try await stored(root)
         precondition(final.messages == large.messages)
-        print("HISTORY_CACHE_SAVING_OK: 11 cases, unchanged 2000-message refresh save median \(String(format: "%.3f", timings.sorted()[7])) ms")
+        print("HISTORY_CACHE_SAVING_OK: 13 cases, unchanged 2000-message refresh save median \(String(format: "%.3f", timings.sorted()[7])) ms")
     }
 }
