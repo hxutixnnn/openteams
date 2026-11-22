@@ -233,7 +233,7 @@ struct TeamsReadDetailView: View {
                 }
                 .scrollTargetLayout()
                 #if DEBUG
-                .modifier(TeamsScrollBenchmarkTarget(ids: messages.map(\.id), markScrollIntent: { noteTimelineIntent() }))
+                .modifier(TeamsScrollBenchmarkTarget(ids: store.messageIDs(in: chat.id), markScrollIntent: { noteTimelineIntent() }))
                 #endif
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .frame(maxWidth: 800)
@@ -319,7 +319,7 @@ struct TeamsReadDetailView: View {
                     .padding(18)
                 }
             }
-            .onChange(of: messages.map(\.id), initial: true) { old, new in
+            .onChange(of: store.messageIDs(in: chat.id), initial: true) { old, new in
                 resolveUnreadBoundary()
                 guard !new.isEmpty else { return }
                 if let anchor = restoreAnchor {
