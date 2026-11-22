@@ -1004,16 +1004,26 @@ public final class TeamsReaderStore {
     }
 
     private func refreshPendingReadStatus(_ chatID: String, generation expected: UUID) async {
-        guard let cache else { return }
-        do {
-            let pending = try await cache.pendingRead(in: chatID)
-            guard expected == generation else { return }
-            if let pending {
-                pendingReadChatIDs.insert(chatID)
-                if pending.stage == .bookmarkAccepted || (pending.stage == .horizonRejected && pending.bookmarkRequired) { finishableReadChatIDs.insert(chatID) }
-                else { finishableReadChatIDs.remove(chatID) }
-            } else { pendingReadChatIDs.remove(chatID); finishableReadChatIDs.remove(chatID) }
-        } catch { if expected == generation { cacheWarning = "A saved read update could not be checked on this Mac." } }
+        await refreshPendingReadStatuses([chatID], generation: expected)
+    }
+
+    private func refreshPendingReadStatuses(_ chatIDs: [String], generation expected: UUID) async {
+        guard let cache, !chatIDs.isEmpty else { return }
+        let pending = await cache.pendingReads(in: chatIDs)
+        guard expected == generation else { return }
+        var pendingIDs = pendingReadChatIDs, finishableIDs = finishableReadChatIDs
+        for chatID in chatIDs {
+            switch pending[chatID] {
+            case .failure: cacheWarning = "A saved read update could not be checked on this Mac."
+            case .success(let intent?):
+                pendingIDs.insert(chatID)
+                if intent.stage == .bookmarkAccepted || (intent.stage == .horizonRejected && intent.bookmarkRequired) { finishableIDs.insert(chatID) }
+                else { finishableIDs.remove(chatID) }
+            case .success(nil), nil: pendingIDs.remove(chatID); finishableIDs.remove(chatID)
+            }
+        }
+        if pendingIDs != pendingReadChatIDs { pendingReadChatIDs = pendingIDs }
+        if finishableIDs != finishableReadChatIDs { finishableReadChatIDs = finishableIDs }
     }
 
     public func canEditMessage(in chatID: String, messageID: String) -> Bool {
@@ -1886,7 +1896,7 @@ public final class TeamsReaderStore {
             hasMoreChats = chatsCursor != nil
             lastRefreshedAt = stored.refreshedAt
             let ids = stored.chats.map(\.id)
-            Task { for id in ids { await self.refreshPendingReadStatus(id, generation: current) } }
+            Task { await self.refreshPendingReadStatuses(ids, generation: current) }
         } catch {
             if current == generation { cacheWarning = "Saved conversations could not be read. Connect to Teams to download them again." }
         }
@@ -1970,7 +1980,7 @@ public final class TeamsReaderStore {
             hasMoreChats = chatsCursor != nil
             lastRefreshedAt = Date()
             let ids = page.items.map(\.id)
-            Task { for id in ids { await self.refreshPendingReadStatus(id, generation: current) } }
+            Task { await self.refreshPendingReadStatuses(ids, generation: current) }
             for id in histories.keys { render(id) }
             do { try await cache.save(.init(chats: chats, continuationToken: chatsCursor, refreshedAt: lastRefreshedAt)) }
             catch { if current == generation { cacheWarning = "Conversations could not be saved on this Mac." } }
