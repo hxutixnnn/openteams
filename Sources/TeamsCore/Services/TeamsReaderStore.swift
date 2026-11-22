@@ -236,6 +236,11 @@ public final class TeamsReaderStore {
 
     public func messages(in id: String) -> [TeamsRenderedMessage] { renderedMessages[id] ?? [] }
     public func messageIDs(in id: String) -> [String] { renderedMessageIDs[id] ?? [] }
+    public func messageIndex(of messageID: String, in chatID: String) -> Int? {
+        guard let messages = renderedMessages[chatID], let index = renderingInputs[chatID]?.messageIndices[messageID],
+              messages.indices.contains(index), messages[index].id == messageID else { return nil }
+        return index
+    }
     public func isLoadingConversation(_ id: String) -> Bool { loadingChatIDs.contains(id) || cachedLoadCounts[id, default: 0] > 0 }
     public func ownsSharePointAttachment(_ attachment: TeamsSharePointAttachment) -> Bool {
         guard attachment.accountScope == accountScope, attachment.accountRevision == accountRevision else { return false }
