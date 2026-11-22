@@ -233,7 +233,7 @@ public struct TeamsWebMessage: Codable, Identifiable, Hashable, Sendable {
                 if zoneStart < 23 { milliseconds += Int(bytes[zoneStart] - 48) * [100, 10, 1][zoneStart - 20] }
                 zoneStart += 1
             }
-            guard zoneStart > 20 else { return nil }
+            guard (21...29).contains(zoneStart) else { return nil }
         }
         let zone = bytes[zoneStart...]
         let isUTC = zone.count == 1 && (zone.first == UInt8(ascii: "Z") || zone.first == UInt8(ascii: "z"))
