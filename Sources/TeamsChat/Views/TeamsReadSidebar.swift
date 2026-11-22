@@ -41,7 +41,7 @@ struct TeamsReadSidebar: View {
         if folder.sortType == "NameAlphabetical" {
             result.sort { store.conversationTitle($0).localizedStandardCompare(store.conversationTitle($1)) == .orderedAscending }
         } else if folder.sortType == "MostRecent" || folder.sortType == "UnreadThenMostRecent" || folder.sortType == "UnreadOnly" {
-            let ranks = Dictionary(store.chats.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
+            let ranks = store.chatRanks
             if folder.sortType == "UnreadOnly" { result = result.filter { $0.isRead == false } }
             result.sort { a, b in
                 if folder.sortType == "UnreadThenMostRecent", (a.isRead == false) != (b.isRead == false) { return a.isRead == false }
