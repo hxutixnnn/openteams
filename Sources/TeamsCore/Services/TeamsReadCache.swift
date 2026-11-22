@@ -127,6 +127,16 @@ public actor TeamsReadCache {
     public func pendingRead(in chatID: String) throws -> TeamsPendingReadIntent? {
         try read("read-intent-" + Self.digest(chatID), as: TeamsPendingReadRecord.self)?.intent
     }
+    public func pendingReads(in chatIDs: [String]) -> [String: Result<TeamsPendingReadIntent?, any Error>] {
+        let names: Set<String>?
+        do { names = Set(try FileManager.default.contentsOfDirectory(atPath: directory.path)) }
+        catch { names = FileManager.default.fileExists(atPath: directory.path) ? nil : [] }
+        var reads: [String: Result<TeamsPendingReadIntent?, any Error>] = [:]
+        for chatID in chatIDs where names?.contains("read-intent-" + Self.digest(chatID) + ".json") ?? true {
+            reads[chatID] = Result { try pendingRead(in: chatID) }
+        }
+        return reads
+    }
     private func editKey(_ chatID: String, _ messageID: String) -> String { "edit\n" + chatID + "\n" + messageID }
     private func deletionName(_ chatID: String, _ messageID: String) -> String { "delete-intent-" + Self.digest(editKey(chatID, messageID)) }
     public func pendingDeletion(in chatID: String, messageID: String) throws -> TeamsPendingDeletion? {
