@@ -136,17 +136,17 @@ struct TeamsReadDetailView: View {
         }
     }
 
-    private func rowActions(for message: TeamsRenderedMessage, knownIDs: Set<String>) -> TeamsMessageRowActions {
+    private func rowActions(for message: TeamsRenderedMessage) -> TeamsMessageRowActions {
         rowActionCache.actions(for: chat.id + ":" + message.id) { actions in
             actions.loadImage = { [store] image, fullSize in try await store.imageData(for: image, fullSize: fullSize) }
             actions.loadPhoto = { [store] person in try await store.profilePhoto(for: person) }
             actions.replyAuthor = { [store] reply in store.replyAuthor(reply, in: chat.id) }
             actions.canJumpToMessage = { id in
-                knownIDs.contains(id) || (store.connected && !id.isEmpty && id.utf8.count <= 32 && id.utf8.allSatisfy { (48...57).contains($0) })
+                store.messageIndex(of: id, in: chat.id) != nil || (store.connected && !id.isEmpty && id.utf8.count <= 32 && id.utf8.allSatisfy { (48...57).contains($0) })
             }
             actions.jumpToMessage = { id in
                 noteTimelineIntent()
-                if knownIDs.contains(id) { jumpToMessage = .init(messageID: id, chatID: chat.id, accountScope: accountScope) }
+                if store.messageIndex(of: id, in: chat.id) != nil { jumpToMessage = .init(messageID: id, chatID: chat.id, accountScope: accountScope) }
                 else {
                     showMessageContext = true
                     Task { guard showMessageContext, selectedChatID == chat.id, accountScope == store.accountScope else { return }; await store.openMessageContext(in: chat.id, targetID: id) }
@@ -209,8 +209,8 @@ struct TeamsReadDetailView: View {
                         }
                         .padding(.bottom, 6)
                     }
-                    let knownMessageIDs = Set(messages.map(\.id))
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                    ForEach(messages) { message in
+                        let index = store.messageIndex(of: message.id, in: chat.id) ?? 0
                         let accountScope = store.accountScope
                         let startsUnread = firstUnreadMessageID == message.id
                         VStack(alignment: .leading, spacing: 0) {
@@ -221,7 +221,7 @@ struct TeamsReadDetailView: View {
                             TeamsMessageRow(message: message, compact: compact, grouped: !startsUnread && isGrouped(at: index), accountID: store.accountID,
                                             canEdit: store.canEditMessage(in: chat.id, messageID: message.id), canReact: store.canReact(in: chat.id, messageID: message.id),
                                             mediaRevision: store.mediaRevision, mediaRefreshRevision: store.mediaRefreshRevision,
-                                            actions: rowActions(for: message, knownIDs: knownMessageIDs),
+                                            actions: rowActions(for: message),
                                             filePreviewConnected: store.connected, deletionStage: store.deletionStage(in: chat.id, messageID: message.id), deletionMessage: store.deletionMessage(in: chat.id, messageID: message.id), canDelete: store.canDelete(in: chat.id, messageID: message.id))
                             .equatable()
                         }
