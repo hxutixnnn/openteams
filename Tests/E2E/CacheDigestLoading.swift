@@ -191,9 +191,7 @@ private actor DigestOffline: HTTPTransport {
         await store.loadConversation("fixture")
         precondition(store.messages(in: "fixture").count == raw.count)
         let deletionStart = ContinuousClock.now
-        for message in store.messages(in: "fixture") {
-            await store.loadDeletionStatus(in: "fixture", messageID: message.id, expectedScope: store.accountScope, expectedRevision: store.accountRevision)
-        }
+        await store.loadDeletionStatuses(in: "fixture", messageIDs: store.messageIDs(in: "fixture"), expectedScope: store.accountScope, expectedRevision: store.accountRevision)
         let elapsed = milliseconds(deletionStart)
         precondition(store.deletionStage(in: "fixture", messageID: raw.last!.id) == .prepared)
         try report("deletion_status_2000", elapsed, count: 2000)

@@ -132,6 +132,14 @@ public actor TeamsReadCache {
     public func pendingDeletion(in chatID: String, messageID: String) throws -> TeamsPendingDeletion? {
         try read(deletionName(chatID, messageID), as: TeamsPendingDeletionRecord.self)?.intent
     }
+    public func pendingDeletions(in chatID: String, messageIDs: [String]) -> [String: Result<TeamsPendingDeletion?, any Error>] {
+        let names = Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+        var deletions: [String: Result<TeamsPendingDeletion?, any Error>] = [:]
+        for messageID in messageIDs where names.contains(deletionName(chatID, messageID) + ".json") {
+            deletions[messageID] = Result { try pendingDeletion(in: chatID, messageID: messageID) }
+        }
+        return deletions
+    }
     public func installPendingDeletion(_ intent: TeamsPendingDeletion, in chatID: String) throws -> Bool {
         let key = editKey(chatID, intent.original.id)
         return try withReadIntentLock(key) {

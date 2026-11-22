@@ -226,9 +226,6 @@ struct TeamsReadDetailView: View {
                             .equatable()
                         }
                         .id(message.id)
-                        .task(id: "\(accountRevision.uuidString):\(chat.id):\(message.id)") {
-                            await store.loadDeletionStatus(in: chat.id, messageID: message.id, expectedScope: self.accountScope, expectedRevision: accountRevision)
-                        }
                     }
                 }
                 .scrollTargetLayout()
@@ -334,6 +331,12 @@ struct TeamsReadDetailView: View {
                             scheduleAutomaticScroll(proxy, to: last, initial: false)
                     } else { newMessageCount += update.newMessageCount }
                 }
+            }
+            .onChange(of: store.messageIDs(in: chat.id), initial: true) { old, new in
+                let loaded = old == new ? [] : Set(old)
+                let added = new.filter { !loaded.contains($0) }
+                guard !added.isEmpty else { return }
+                Task { await store.loadDeletionStatuses(in: chat.id, messageIDs: added, expectedScope: accountScope, expectedRevision: accountRevision) }
             }
             .onChange(of: loading) { wasLoading, isLoading in
                 guard wasLoading, !isLoading, !completedInitialLoadPosition, !messages.isEmpty else { return }

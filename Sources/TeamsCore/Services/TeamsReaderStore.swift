@@ -1280,22 +1280,29 @@ public final class TeamsReaderStore {
         return connected && session?.messaging != nil && (retryNotBefore.map { $0 <= Date() } ?? true) && (stage == nil || stage == .rejected)
     }
     public func loadDeletionStatus(in chatID: String, messageID: String, expectedScope: String, expectedRevision: UUID) async {
+        await loadDeletionStatuses(in: chatID, messageIDs: [messageID], expectedScope: expectedScope, expectedRevision: expectedRevision)
+    }
+    public func loadDeletionStatuses(in chatID: String, messageIDs: [String], expectedScope: String, expectedRevision: UUID) async {
         guard expectedScope == accountScope, expectedRevision == accountRevision, let cache else { return }
-        let current = generation, target = ReactionTarget(chat: chatID, message: messageID)
-        let observed = deletionStatusRevision[target]
-        guard !loadingDeletionStatus.contains(target) else { return }
-        loadingDeletionStatus.insert(target)
-        defer { loadingDeletionStatus.remove(target) }
-        do {
-            let pending = try await cache.pendingDeletion(in: chatID, messageID: messageID)
-            guard current == generation, expectedRevision == accountRevision, expectedScope == accountScope, deletionStatusRevision[target] == observed else { return }
+        let current = generation
+        let targets = messageIDs.map { ReactionTarget(chat: chatID, message: $0) }.filter { !loadingDeletionStatus.contains($0) }
+        guard !targets.isEmpty else { return }
+        let observed = targets.map { deletionStatusRevision[$0] }
+        loadingDeletionStatus.formUnion(targets)
+        defer { loadingDeletionStatus.subtract(targets) }
+        let pending = await cache.pendingDeletions(in: chatID, messageIDs: targets.map(\.message))
+        guard current == generation, expectedRevision == accountRevision, expectedScope == accountScope else { return }
+        for (target, observed) in zip(targets, observed) where deletionStatusRevision[target] == observed {
+            let intent: TeamsPendingDeletion?
+            switch pending[target.message] {
+            case .failure: chatErrors[chatID] = "Could not read the saved deletion status."; continue
+            case .success(let saved): intent = saved
+            case nil: intent = nil
+            }
             let stage: TeamsPendingDeletion.Stage?
-            if acceptedDeletionMemory.contains(target), pending == nil || pending?.stage == .dispatched || pending?.stage == .uncertain { stage = .accepted }
-            else { stage = pending?.stage }
-            guard deletionStages[target] != stage else { return }
-            deletionStages[target] = stage
-        } catch {
-            if current == generation, expectedRevision == accountRevision, expectedScope == accountScope { chatErrors[chatID] = "Could not read the saved deletion status." }
+            if acceptedDeletionMemory.contains(target), intent == nil || intent?.stage == .dispatched || intent?.stage == .uncertain { stage = .accepted }
+            else { stage = intent?.stage }
+            if deletionStages[target] != stage { deletionStages[target] = stage }
         }
     }
 
