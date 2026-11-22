@@ -2110,25 +2110,41 @@ private actor TeamsCachedMessageRenderer {
         #endif
     }
 
-    func render(_ messages: [TeamsWebMessage], people: [String: Person], accountScope: String, accountRevision: UUID, chatID: String) throws -> Prepared {
+    private static let chunkSize = 128
+
+    func render(_ messages: [TeamsWebMessage], people: [String: Person], accountScope: String, accountRevision: UUID, chatID: String) async throws -> Prepared {
         #if DEBUG
         let start = ContinuousClock.now
         #endif
-        var rendered: [TeamsRenderedMessage] = []
-        var indices: [String: Int] = [:]
-        rendered.reserveCapacity(messages.count)
-        indices.reserveCapacity(messages.count)
-        for message in messages {
-            try Task.checkCancellation()
-            if indices[message.id] == nil { indices[message.id] = rendered.count }
-            rendered.append(TeamsRenderedMessage(message, people: people, accountScope: accountScope, accountRevision: accountRevision, chatID: chatID))
+        let chunks = stride(from: 0, to: messages.count, by: Self.chunkSize).map { messages[$0..<min($0 + Self.chunkSize, messages.count)] }
+        let (rendered, convertedOnMainThread) = try await withThrowingTaskGroup(of: (Int, [TeamsRenderedMessage], Bool).self) { group in
+            for (position, chunk) in chunks.enumerated() {
+                group.addTask {
+                    (position, try chunk.map { message in
+                        try Task.checkCancellation()
+                        return TeamsRenderedMessage(message, people: people, accountScope: accountScope, accountRevision: accountRevision, chatID: chatID)
+                    }, Self.isMainThread())
+                }
+            }
+            var converted = Array(repeating: [TeamsRenderedMessage](), count: chunks.count)
+            var onMainThread = false
+            for try await (position, chunk, main) in group {
+                converted[position] = chunk
+                onMainThread = onMainThread || main
+            }
+            return (converted.flatMap { $0 }, onMainThread)
         }
+        var indices: [String: Int] = [:]
+        indices.reserveCapacity(messages.count)
+        for (position, message) in messages.enumerated() where indices[message.id] == nil { indices[message.id] = position }
         #if DEBUG
-        return Prepared(messages: rendered, indices: indices, conversionMilliseconds: cachedLoadMilliseconds(since: start), convertedOnMainThread: Thread.isMainThread)
+        return Prepared(messages: rendered, indices: indices, conversionMilliseconds: cachedLoadMilliseconds(since: start), convertedOnMainThread: convertedOnMainThread)
         #else
         return Prepared(messages: rendered, indices: indices)
         #endif
     }
+
+    private nonisolated static func isMainThread() -> Bool { Thread.isMainThread }
 }
 
 #if DEBUG
