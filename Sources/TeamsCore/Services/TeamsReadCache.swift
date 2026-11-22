@@ -93,6 +93,7 @@ public actor TeamsReadCache {
         let payload: Value
     }
     private let directory: URL
+    private var savedHistories: [String: TeamsCachedHistory] = [:]
     private let accountID: String
     private let tenantID: String
 
@@ -291,12 +292,22 @@ public actor TeamsReadCache {
     public func save(_ folders: TeamsConversationFolders) throws { try write(folders, name: "folders") }
 
     public func history(in chatID: String) throws -> TeamsCachedHistory {
-        try read("chat-" + Self.digest(chatID), as: TeamsCachedHistory.self) ?? TeamsCachedHistory()
+        let name = "chat-" + Self.digest(chatID)
+        guard let history = try read(name, as: TeamsCachedHistory.self) else { return TeamsCachedHistory() }
+        savedHistories[name] = history
+        return history
     }
 
     public func save(_ chats: TeamsCachedChats) throws { try write(chats, name: "chats") }
     public func save(_ history: TeamsCachedHistory, in chatID: String) throws {
-        try write(history, name: "chat-" + Self.digest(chatID))
+        let name = "chat-" + Self.digest(chatID)
+        if let saved = savedHistories[name], saved.messageToken == history.messageToken, saved.messages == history.messages {
+            savedHistories[name] = history
+            return
+        }
+        savedHistories[name] = nil
+        try write(history, name: name)
+        savedHistories[name] = history
     }
 
     private func read<Value: Codable>(_ name: String, as: Value.Type) throws -> Value? {
