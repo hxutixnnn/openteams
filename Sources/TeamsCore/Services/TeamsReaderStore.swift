@@ -2002,14 +2002,11 @@ public final class TeamsReaderStore {
             && previous?.accountRevision == accountRevision
         if canReuse, previous?.messages == messages { return }
 
-        var reusable: [String: (raw: TeamsWebMessage, rendered: TeamsRenderedMessage)] = [:]
-        if canReuse, let previous {
-            for (raw, rendered) in zip(previous.messages, renderedMessages[id] ?? []) {
-                reusable[raw.id] = (raw, rendered)
-            }
-        }
+        let reusable = canReuse ? previous : nil
+        let previousRendered = reusable == nil ? [] : renderedMessages[id] ?? []
         let rendered = messages.map { message in
-            if let cached = reusable[message.id], cached.raw == message { return cached.rendered }
+            if let reusable, let index = reusable.messageIndices[message.id], reusable.messages.indices.contains(index), previousRendered.indices.contains(index),
+               previousRendered[index].id == message.id, reusable.messages[index] == message { return previousRendered[index] }
             return TeamsRenderedMessage(message, people: people, accountScope: accountScope, accountRevision: accountRevision, chatID: id)
         }
         let messageIndices = Dictionary(messages.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
